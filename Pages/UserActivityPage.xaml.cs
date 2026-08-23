@@ -1,3 +1,4 @@
+using EAVdrop.Models;
 using EAVdrop.Services;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -48,15 +49,29 @@ public partial class UserActivityPage : ContentPage, IQueryAttributable
             var playing = (await sessionsTask)
                 .FirstOrDefault(s => string.Equals(s.UserId, _userId, StringComparison.OrdinalIgnoreCase) && s.NowPlayingItem is not null);
 
-            if (playing is null)
+            if (playing is not null)
             {
-                NowPlayingLabel.Text = "Nothing playing";
-                NowPlayingDeviceLabel.Text = "";
+                SummaryTitleLabel.Text = "Now Playing";
+                SummaryMainLabel.Text = playing.MediaDisplay;
+                SummaryDetailLabel.Text = JoinParts(playing.PlaybackMethod, playing.DeviceDisplay, playing.ProgressText);
             }
             else
             {
-                NowPlayingLabel.Text = $"{playing.MediaDisplay} — {playing.PlaybackMethod}";
-                NowPlayingDeviceLabel.Text = $"{playing.DeviceDisplay} • {playing.ProgressText}";
+                var cutoff = DateTimeOffset.Now.AddDays(-30);
+                var lastActivity = activity.FirstOrDefault(a => a.Date >= cutoff);
+
+                SummaryTitleLabel.Text = "Last Activity";
+
+                if (lastActivity is null)
+                {
+                    SummaryMainLabel.Text = "Nothing played in the last 30 days.";
+                    SummaryDetailLabel.Text = "";
+                }
+                else
+                {
+                    SummaryMainLabel.Text = GetActivitySummary(lastActivity);
+                    SummaryDetailLabel.Text = JoinParts(lastActivity.Name, lastActivity.DateDisplay);
+                }
             }
 
             ActivityView.ItemsSource = activity;
@@ -68,4 +83,15 @@ public partial class UserActivityPage : ContentPage, IQueryAttributable
             StatusLabel.Text = ex.Message;
         }
     }
+
+    private static string GetActivitySummary(ActivityLogEntryDto activity)
+    {
+        if (!string.IsNullOrWhiteSpace(activity.Overview)) return activity.Overview!;
+        if (!string.IsNullOrWhiteSpace(activity.ShortOverview)) return activity.ShortOverview!;
+        if (!string.IsNullOrWhiteSpace(activity.Name)) return activity.Name!;
+        return activity.Type ?? "Activity";
+    }
+
+    private static string JoinParts(params string?[] parts) =>
+        string.Join(" • ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
 }
