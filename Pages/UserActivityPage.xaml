@@ -10,9 +10,9 @@
 
         <Border Grid.Row="1" Style="{StaticResource CardBorder}">
             <VerticalStackLayout Spacing="5">
-                <Label Text="Now Playing" FontAttributes="Bold" TextColor="{StaticResource EavAccent}" />
-                <Label x:Name="NowPlayingLabel" Text="Nothing playing" FontSize="18" />
-                <Label x:Name="NowPlayingDeviceLabel" Style="{StaticResource MutedLabel}" />
+                <Label x:Name="SummaryTitleLabel" Text="Last Activity" FontAttributes="Bold" TextColor="{StaticResource EavAccent}" />
+                <Label x:Name="SummaryMainLabel" Text="Loading…" FontSize="18" />
+                <Label x:Name="SummaryDetailLabel" Style="{StaticResource MutedLabel}" />
             </VerticalStackLayout>
         </Border>
 
