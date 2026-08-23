@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="EAVdrop.Pages.UserActivityPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    Title="User Activity">
+
+    <Grid Padding="18" RowDefinitions="Auto,Auto,Auto,*" RowSpacing="12">
+        <Label x:Name="UserTitle" Text="User" FontSize="28" FontAttributes="Bold" />
+
+        <Border Grid.Row="1" Style="{StaticResource CardBorder}">
+            <VerticalStackLayout Spacing="5">
+                <Label Text="Now Playing" FontAttributes="Bold" TextColor="{StaticResource EavAccent}" />
+                <Label x:Name="NowPlayingLabel" Text="Nothing playing" FontSize="18" />
+                <Label x:Name="NowPlayingDeviceLabel" Style="{StaticResource MutedLabel}" />
+            </VerticalStackLayout>
+        </Border>
+
+        <Label Grid.Row="2" x:Name="StatusLabel" Style="{StaticResource MutedLabel}" />
+
+        <CollectionView Grid.Row="3" x:Name="ActivityView" SelectionMode="None">
+            <CollectionView.EmptyView>
+                <Label Text="No recent activity for this user." Style="{StaticResource MutedLabel}" HorizontalOptions="Center" Margin="0,40" />
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate>
+                    <Border Style="{StaticResource CardBorder}">
+                        <VerticalStackLayout Spacing="4">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <Label Text="{Binding Name}" FontAttributes="Bold" FontSize="17" />
+                                <Label Grid.Column="1" Text="{Binding DateDisplay}" Style="{StaticResource MutedLabel}" />
+                            </Grid>
+                            <Label Text="{Binding Detail}" />
+                            <Label Text="{Binding Type}" Style="{StaticResource MutedLabel}" />
+                        </VerticalStackLayout>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</ContentPage>

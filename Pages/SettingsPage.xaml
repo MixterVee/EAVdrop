@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="EAVdrop.Pages.SettingsPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    Title="Settings">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="18" Spacing="14" MaximumWidthRequest="760" HorizontalOptions="Fill">
+            <Label Text="Settings" FontSize="28" FontAttributes="Bold" />
+            <Label Text="Your API key stays on this device in secure storage. EAVdrop never needs your Emby password." Style="{StaticResource MutedLabel}" />
+
+            <Border Style="{StaticResource CardBorder}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Connection" FontSize="20" FontAttributes="Bold" />
+
+                    <Label Text="Local Emby URL" FontAttributes="Bold" />
+                    <Entry x:Name="LocalUrlEntry" Placeholder="http://192.168.1.188:19096" Keyboard="Url" />
+
+                    <Label Text="Remote HTTPS URL" FontAttributes="Bold" />
+                    <Entry x:Name="RemoteUrlEntry" Placeholder="https://emby.example.com" Keyboard="Url" />
+
+                    <Label Text="Connection mode" FontAttributes="Bold" />
+                    <Picker x:Name="ModePicker" />
+
+                    <Label Text="EAVdrop API key" FontAttributes="Bold" />
+                    <Entry x:Name="ApiKeyEntry" IsPassword="True" Placeholder="Paste the API key here" />
+                </VerticalStackLayout>
+            </Border>
+
+            <HorizontalStackLayout Spacing="10">
+                <Button Text="Save" Clicked="SaveClicked" />
+                <Button Text="Test Connection" Clicked="TestClicked" />
+            </HorizontalStackLayout>
+
+            <ActivityIndicator x:Name="BusyIndicator" IsVisible="False" IsRunning="False" />
+            <Label x:Name="StatusLabel" Style="{StaticResource MutedLabel}" />
+
+            <Border Style="{StaticResource CardBorder}">
+                <VerticalStackLayout Spacing="6">
+                    <Label Text="Playback Reporting" FontSize="18" FontAttributes="Bold" />
+                    <Label Text="Plugin installed on the server. Detailed Playback Reporting integration is reserved for the next milestone after we confirm the standard Emby activity/session API against your server." Style="{StaticResource MutedLabel}" />
+                </VerticalStackLayout>
+            </Border>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="EAVdrop.Pages.UsersPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    Title="Users">
+
+    <Grid Padding="18" RowDefinitions="Auto,Auto,*" RowSpacing="10">
+        <Grid ColumnDefinitions="*,Auto">
+            <Label Text="Users" FontSize="28" FontAttributes="Bold" VerticalTextAlignment="Center" />
+            <Button Grid.Column="1" Text="Refresh" Clicked="RefreshClicked" />
+        </Grid>
+        <Label Grid.Row="1" x:Name="StatusLabel" Style="{StaticResource MutedLabel}" />
+
+        <CollectionView Grid.Row="2" x:Name="UsersView" SelectionMode="Single" SelectionChanged="UserSelected">
+            <CollectionView.ItemTemplate>
+                <DataTemplate>
+                    <Border Style="{StaticResource CardBorder}">
+                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" RowSpacing="4">
+                            <Label Text="{Binding Name}" FontSize="20" FontAttributes="Bold" />
+                            <Label Grid.Row="1" Text="{Binding LastActivityDisplay}" Style="{StaticResource MutedLabel}" />
+                            <Label Grid.Column="1" Grid.RowSpan="2" Text="View ›" TextColor="{StaticResource EavAccent}" VerticalTextAlignment="Center" FontAttributes="Bold" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</ContentPage>
