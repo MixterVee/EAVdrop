@@ -36,6 +36,12 @@ public sealed class SessionInfoDto
     }
 }
 
+public sealed class UserItemQueryResultDto
+{
+    public List<BaseItemDto> Items { get; set; } = [];
+    public int TotalRecordCount { get; set; }
+}
+
 public sealed class BaseItemDto
 {
     public string? Id { get; set; }
@@ -45,6 +51,7 @@ public sealed class BaseItemDto
     public int? IndexNumber { get; set; }
     public long? RunTimeTicks { get; set; }
     public string? Type { get; set; }
+    public UserItemDataDto? UserData { get; set; }
 
     public string DisplayName
     {
@@ -61,6 +68,15 @@ public sealed class BaseItemDto
             return Name ?? "Unknown media";
         }
     }
+}
+
+public sealed class UserItemDataDto
+{
+    public double? PlayedPercentage { get; set; }
+    public long PlaybackPositionTicks { get; set; }
+    public int PlayCount { get; set; }
+    public DateTimeOffset? LastPlayedDate { get; set; }
+    public bool Played { get; set; }
 }
 
 public sealed class PlayerStateInfoDto

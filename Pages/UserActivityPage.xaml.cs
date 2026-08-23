@@ -1,4 +1,3 @@
-using EAVdrop.Models;
 using EAVdrop.Services;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -39,7 +38,8 @@ public partial class UserActivityPage : ContentPage, IQueryAttributable
         {
             var activityTask = _api.GetActivityAsync(400);
             var sessionsTask = _api.GetSessionsAsync();
-            await Task.WhenAll(activityTask, sessionsTask);
+            var recentPlayedTask = _api.GetRecentPlayedItemsAsync(_userId, 50);
+            await Task.WhenAll(activityTask, sessionsTask, recentPlayedTask);
 
             var activity = (await activityTask).Items
                 .Where(a => string.Equals(a.UserId, _userId, StringComparison.OrdinalIgnoreCase))
@@ -58,19 +58,22 @@ public partial class UserActivityPage : ContentPage, IQueryAttributable
             else
             {
                 var cutoff = DateTimeOffset.Now.AddDays(-30);
-                var lastActivity = activity.FirstOrDefault(a => a.Date >= cutoff);
+                var lastPlayed = (await recentPlayedTask).Items
+                    .Where(i => i.UserData?.LastPlayedDate is not null)
+                    .OrderByDescending(i => i.UserData!.LastPlayedDate)
+                    .FirstOrDefault();
 
-                SummaryTitleLabel.Text = "Last Activity";
+                SummaryTitleLabel.Text = "Last Played";
 
-                if (lastActivity is null)
+                if (lastPlayed?.UserData?.LastPlayedDate is not DateTimeOffset lastPlayedDate || lastPlayedDate < cutoff)
                 {
                     SummaryMainLabel.Text = "Nothing played in the last 30 days.";
                     SummaryDetailLabel.Text = "";
                 }
                 else
                 {
-                    SummaryMainLabel.Text = GetActivitySummary(lastActivity);
-                    SummaryDetailLabel.Text = JoinParts(lastActivity.Name, lastActivity.DateDisplay);
+                    SummaryMainLabel.Text = lastPlayed.DisplayName;
+                    SummaryDetailLabel.Text = lastPlayedDate.LocalDateTime.ToString("g");
                 }
             }
 
@@ -82,14 +85,6 @@ public partial class UserActivityPage : ContentPage, IQueryAttributable
             ActivityView.ItemsSource = null;
             StatusLabel.Text = ex.Message;
         }
-    }
-
-    private static string GetActivitySummary(ActivityLogEntryDto activity)
-    {
-        if (!string.IsNullOrWhiteSpace(activity.Overview)) return activity.Overview!;
-        if (!string.IsNullOrWhiteSpace(activity.ShortOverview)) return activity.ShortOverview!;
-        if (!string.IsNullOrWhiteSpace(activity.Name)) return activity.Name!;
-        return activity.Type ?? "Activity";
     }
 
     private static string JoinParts(params string?[] parts) =>
