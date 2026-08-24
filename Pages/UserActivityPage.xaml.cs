@@ -1,3 +1,4 @@
+using EAVdrop.Models;
 using EAVdrop.Services;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -32,18 +33,27 @@ public partial class UserActivityPage : ContentPage, IQueryAttributable
     private async Task LoadAsync()
     {
         if (string.IsNullOrWhiteSpace(_userId)) return;
-        StatusLabel.Text = "Loading user activity…";
+        StatusLabel.Text = "Loading 30-day playback history…";
 
         try
         {
-            var activityTask = _api.GetActivityAsync(400);
             var sessionsTask = _api.GetSessionsAsync();
-            var recentPlayedTask = _api.GetRecentPlayedItemsAsync(_userId, 50);
-            await Task.WhenAll(activityTask, sessionsTask, recentPlayedTask);
+            var recentPlayedTask = _api.GetRecentPlayedItemsAsync(_userId, 500);
+            await Task.WhenAll(sessionsTask, recentPlayedTask);
 
-            var activity = (await activityTask).Items
-                .Where(a => string.Equals(a.UserId, _userId, StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(a => a.Date)
+            var cutoff = DateTimeOffset.Now.AddDays(-30);
+            var playback = (await recentPlayedTask).Items
+                .Select(item => new { Item = item, Date = item.UserData?.LastPlayedDate })
+                .Where(x => x.Date.HasValue && x.Date.Value >= cutoff)
+                .Select(x => new PlaybackHistoryItem
+                {
+                    UserId = _userId,
+                    UserName = _userName,
+                    Title = x.Item.DisplayName,
+                    Type = x.Item.Type ?? "Media",
+                    PlayedDate = x.Date!.Value
+                })
+                .OrderByDescending(x => x.PlayedDate)
                 .ToList();
 
             var playing = (await sessionsTask)
@@ -55,30 +65,23 @@ public partial class UserActivityPage : ContentPage, IQueryAttributable
                 SummaryMainLabel.Text = playing.MediaDisplay;
                 SummaryDetailLabel.Text = JoinParts(playing.PlaybackMethod, playing.DeviceDisplay, playing.ProgressText);
             }
+            else if (playback.FirstOrDefault() is PlaybackHistoryItem lastPlayed)
+            {
+                SummaryTitleLabel.Text = "Last Played";
+                SummaryMainLabel.Text = lastPlayed.Title;
+                SummaryDetailLabel.Text = lastPlayed.DateDisplay;
+            }
             else
             {
-                var cutoff = DateTimeOffset.Now.AddDays(-30);
-                var lastPlayed = (await recentPlayedTask).Items
-                    .Where(i => i.UserData?.LastPlayedDate is not null)
-                    .OrderByDescending(i => i.UserData!.LastPlayedDate)
-                    .FirstOrDefault();
-
                 SummaryTitleLabel.Text = "Last Played";
-
-                if (lastPlayed?.UserData?.LastPlayedDate is not DateTimeOffset lastPlayedDate || lastPlayedDate < cutoff)
-                {
-                    SummaryMainLabel.Text = "Nothing played in the last 30 days.";
-                    SummaryDetailLabel.Text = "";
-                }
-                else
-                {
-                    SummaryMainLabel.Text = lastPlayed.DisplayName;
-                    SummaryDetailLabel.Text = lastPlayedDate.LocalDateTime.ToString("g");
-                }
+                SummaryMainLabel.Text = "Nothing played in the last 30 days.";
+                SummaryDetailLabel.Text = "";
             }
 
-            ActivityView.ItemsSource = activity;
-            StatusLabel.Text = $"{activity.Count} recent activity entries";
+            ActivityView.ItemsSource = playback;
+            StatusLabel.Text = playback.Count == 1
+                ? "1 item played in the last 30 days"
+                : $"{playback.Count} items played in the last 30 days";
         }
         catch (Exception ex)
         {
