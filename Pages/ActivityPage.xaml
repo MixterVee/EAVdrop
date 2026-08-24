@@ -33,10 +33,7 @@
                                 <Label Text="{Binding Title}" FontAttributes="Bold" FontSize="17" />
                                 <Label Grid.Column="1" Text="{Binding DateDisplay}" Style="{StaticResource MutedLabel}" />
                             </Grid>
-                            <Grid ColumnDefinitions="*,Auto">
-                                <Label Text="{Binding UserName}" TextColor="{StaticResource EavAccent}" />
-                                <Label Grid.Column="1" Text="{Binding Type}" Style="{StaticResource MutedLabel}" />
-                            </Grid>
+                            <Label Text="{Binding UserName}" TextColor="{StaticResource EavAccent}" />
                         </VerticalStackLayout>
                     </Border>
                 </DataTemplate>
