@@ -7,30 +7,32 @@
 
     <Grid Padding="18" RowDefinitions="Auto,Auto,Auto,*" RowSpacing="10">
         <Grid ColumnDefinitions="*,Auto">
-            <Label Text="Activity" FontSize="28" FontAttributes="Bold" VerticalTextAlignment="Center" />
+            <VerticalStackLayout Spacing="2">
+                <Label Text="Activity" FontSize="28" FontAttributes="Bold" />
+                <Label Text="Playback history — last 30 days" Style="{StaticResource MutedLabel}" />
+            </VerticalStackLayout>
             <Button Grid.Column="1" Text="Refresh" Clicked="RefreshClicked" />
         </Grid>
 
         <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="10">
             <Picker x:Name="UserPicker" Title="All users" SelectedIndexChanged="FilterChanged" />
-            <SearchBar Grid.Column="1" x:Name="SearchBox" Placeholder="Search activity" TextChanged="SearchChanged" />
+            <SearchBar Grid.Column="1" x:Name="SearchBox" Placeholder="Search playback" TextChanged="SearchChanged" />
         </Grid>
 
         <Label Grid.Row="2" x:Name="StatusLabel" Style="{StaticResource MutedLabel}" />
 
         <CollectionView Grid.Row="3" x:Name="ActivityView" SelectionMode="None">
             <CollectionView.EmptyView>
-                <Label Text="No matching activity." Style="{StaticResource MutedLabel}" HorizontalOptions="Center" Margin="0,40" />
+                <Label Text="No playback in the last 30 days." Style="{StaticResource MutedLabel}" HorizontalOptions="Center" Margin="0,40" />
             </CollectionView.EmptyView>
             <CollectionView.ItemTemplate>
                 <DataTemplate>
                     <Border Style="{StaticResource CardBorder}">
                         <VerticalStackLayout Spacing="4">
                             <Grid ColumnDefinitions="*,Auto">
-                                <Label Text="{Binding Name}" FontAttributes="Bold" FontSize="17" />
+                                <Label Text="{Binding Title}" FontAttributes="Bold" FontSize="17" />
                                 <Label Grid.Column="1" Text="{Binding DateDisplay}" Style="{StaticResource MutedLabel}" />
                             </Grid>
-                            <Label Text="{Binding Detail}" />
                             <Grid ColumnDefinitions="*,Auto">
                                 <Label Text="{Binding UserName}" TextColor="{StaticResource EavAccent}" />
                                 <Label Grid.Column="1" Text="{Binding Type}" Style="{StaticResource MutedLabel}" />
