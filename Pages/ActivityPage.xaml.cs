@@ -46,17 +46,16 @@ public partial class ActivityPage : ContentPage
             var cutoff = _settings.GetPlaybackHistoryCutoff();
             var historyTasks = users.Select(async user =>
             {
-                var items = (await _api.GetRecentPlayedItemsAsync(user.Id)).Items;
+                var items = await _api.GetPlaybackHistoryItemsAsync(user.Id, cutoff);
                 return items
-                    .Select(item => new { Item = item, Date = item.UserData?.LastPlayedDate })
-                    .Where(x => x.Date.HasValue && (!cutoff.HasValue || x.Date.Value >= cutoff.Value))
-                    .Select(x => new PlaybackHistoryItem
+                    .Where(item => item.UserData?.LastPlayedDate is not null)
+                    .Select(item => new PlaybackHistoryItem
                     {
                         UserId = user.Id,
                         UserName = user.Name,
-                        Title = x.Item.DisplayName,
-                        Type = x.Item.Type ?? "Media",
-                        PlayedDate = x.Date!.Value
+                        Title = item.DisplayName,
+                        Type = item.Type ?? "Media",
+                        PlayedDate = item.UserData!.LastPlayedDate!.Value
                     })
                     .ToList();
             });
