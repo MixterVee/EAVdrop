@@ -58,15 +58,15 @@ public sealed class SettingsService
 
     public string HistoryRangeCaption => HistoryRange switch
     {
-        PlaybackHistoryRange.OneMonth => "last month",
-        PlaybackHistoryRange.TwoMonths => "last 2 months",
-        PlaybackHistoryRange.ThreeMonths => "last 3 months",
+        PlaybackHistoryRange.OneMonth => "the past month",
+        PlaybackHistoryRange.TwoMonths => "the past 2 months",
+        PlaybackHistoryRange.ThreeMonths => "the past 3 months",
         _ => "all available history"
     };
 
     public string NoPlaybackText => HistoryRange == PlaybackHistoryRange.Unlimited
         ? "No playback history found"
-        : $"Nothing played in the {HistoryRangeCaption}";
+        : $"Nothing played in {HistoryRangeCaption}";
 
     public DateTimeOffset? GetPlaybackHistoryCutoff(DateTimeOffset? now = null)
     {
