@@ -7,11 +7,20 @@ public enum ConnectionMode
     Remote
 }
 
+public enum PlaybackHistoryRange
+{
+    OneMonth,
+    TwoMonths,
+    ThreeMonths,
+    Unlimited
+}
+
 public sealed class SettingsService
 {
     private const string LocalUrlKey = "local_url";
     private const string RemoteUrlKey = "remote_url";
     private const string ConnectionModeKey = "connection_mode";
+    private const string PlaybackHistoryRangeKey = "playback_history_range";
     private const string DeviceIdKey = "device_id";
     private const string ApiKeyKey = "emby_api_key";
 
@@ -36,6 +45,48 @@ public sealed class SettingsService
         }
         set => Preferences.Default.Set(ConnectionModeKey, value.ToString());
     }
+
+    public PlaybackHistoryRange HistoryRange
+    {
+        get
+        {
+            var raw = Preferences.Default.Get(PlaybackHistoryRangeKey, PlaybackHistoryRange.OneMonth.ToString());
+            return Enum.TryParse<PlaybackHistoryRange>(raw, out var range) ? range : PlaybackHistoryRange.OneMonth;
+        }
+        set => Preferences.Default.Set(PlaybackHistoryRangeKey, value.ToString());
+    }
+
+    public string HistoryRangeCaption => HistoryRange switch
+    {
+        PlaybackHistoryRange.OneMonth => "last month",
+        PlaybackHistoryRange.TwoMonths => "last 2 months",
+        PlaybackHistoryRange.ThreeMonths => "last 3 months",
+        _ => "all available history"
+    };
+
+    public string NoPlaybackText => HistoryRange == PlaybackHistoryRange.Unlimited
+        ? "No playback history found"
+        : $"Nothing played in the {HistoryRangeCaption}";
+
+    public DateTimeOffset? GetPlaybackHistoryCutoff(DateTimeOffset? now = null)
+    {
+        var current = now ?? DateTimeOffset.Now;
+        return HistoryRange switch
+        {
+            PlaybackHistoryRange.OneMonth => current.AddMonths(-1),
+            PlaybackHistoryRange.TwoMonths => current.AddMonths(-2),
+            PlaybackHistoryRange.ThreeMonths => current.AddMonths(-3),
+            _ => null
+        };
+    }
+
+    public static string GetHistoryRangeSettingLabel(PlaybackHistoryRange range) => range switch
+    {
+        PlaybackHistoryRange.OneMonth => "1 month",
+        PlaybackHistoryRange.TwoMonths => "2 months",
+        PlaybackHistoryRange.ThreeMonths => "3 months",
+        _ => "Unlimited"
+    };
 
     public string DeviceId
     {

@@ -9,7 +9,7 @@
         <Grid ColumnDefinitions="*,Auto">
             <VerticalStackLayout Spacing="2">
                 <Label Text="Activity" FontSize="28" FontAttributes="Bold" />
-                <Label Text="Playback history — last 30 days" Style="{StaticResource MutedLabel}" />
+                <Label x:Name="RangeCaptionLabel" Text="Playback history" Style="{StaticResource MutedLabel}" />
             </VerticalStackLayout>
             <Button Grid.Column="1" Text="Refresh" Clicked="RefreshClicked" />
         </Grid>
@@ -23,7 +23,7 @@
 
         <CollectionView Grid.Row="3" x:Name="ActivityView" SelectionMode="None">
             <CollectionView.EmptyView>
-                <Label Text="No playback in the last 30 days." Style="{StaticResource MutedLabel}" HorizontalOptions="Center" Margin="0,40" />
+                <Label Text="No playback in the selected history range." Style="{StaticResource MutedLabel}" HorizontalOptions="Center" Margin="0,40" />
             </CollectionView.EmptyView>
             <CollectionView.ItemTemplate>
                 <DataTemplate>

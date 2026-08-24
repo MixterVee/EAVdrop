@@ -7,6 +7,7 @@ namespace EAVdrop.Pages;
 public partial class UserActivityPage : ContentPage, IQueryAttributable
 {
     private readonly EmbyApiClient _api;
+    private readonly SettingsService _settings;
     private string _userId = "";
     private string _userName = "User";
 
@@ -14,6 +15,7 @@ public partial class UserActivityPage : ContentPage, IQueryAttributable
     {
         InitializeComponent();
         _api = MauiProgram.Services.GetRequiredService<EmbyApiClient>();
+        _settings = MauiProgram.Services.GetRequiredService<SettingsService>();
     }
 
     public void ApplyQueryAttributes(IDictionary<string, object> query)
@@ -33,18 +35,19 @@ public partial class UserActivityPage : ContentPage, IQueryAttributable
     private async Task LoadAsync()
     {
         if (string.IsNullOrWhiteSpace(_userId)) return;
-        StatusLabel.Text = "Loading 30-day playback history…";
+        HistoryRangeLabel.Text = $"Playback history — {_settings.HistoryRangeCaption}";
+        StatusLabel.Text = "Loading playback history…";
 
         try
         {
             var sessionsTask = _api.GetSessionsAsync();
-            var recentPlayedTask = _api.GetRecentPlayedItemsAsync(_userId, 500);
+            var recentPlayedTask = _api.GetRecentPlayedItemsAsync(_userId);
             await Task.WhenAll(sessionsTask, recentPlayedTask);
 
-            var cutoff = DateTimeOffset.Now.AddDays(-30);
+            var cutoff = _settings.GetPlaybackHistoryCutoff();
             var playback = (await recentPlayedTask).Items
                 .Select(item => new { Item = item, Date = item.UserData?.LastPlayedDate })
-                .Where(x => x.Date.HasValue && x.Date.Value >= cutoff)
+                .Where(x => x.Date.HasValue && (!cutoff.HasValue || x.Date.Value >= cutoff.Value))
                 .Select(x => new PlaybackHistoryItem
                 {
                     UserId = _userId,
@@ -74,14 +77,14 @@ public partial class UserActivityPage : ContentPage, IQueryAttributable
             else
             {
                 SummaryTitleLabel.Text = "Last Played";
-                SummaryMainLabel.Text = "Nothing played in the last 30 days.";
+                SummaryMainLabel.Text = _settings.NoPlaybackText;
                 SummaryDetailLabel.Text = "";
             }
 
             ActivityView.ItemsSource = playback;
             StatusLabel.Text = playback.Count == 1
-                ? "1 item played in the last 30 days"
-                : $"{playback.Count} items played in the last 30 days";
+                ? $"1 item from {_settings.HistoryRangeCaption}"
+                : $"{playback.Count} items from {_settings.HistoryRangeCaption}";
         }
         catch (Exception ex)
         {

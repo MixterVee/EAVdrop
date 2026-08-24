@@ -28,6 +28,15 @@
                 </VerticalStackLayout>
             </Border>
 
+            <Border Style="{StaticResource CardBorder}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Playback history" FontSize="20" FontAttributes="Bold" />
+                    <Label Text="How far back should Activity and Users look?" Style="{StaticResource MutedLabel}" />
+                    <Picker x:Name="HistoryRangePicker" Title="Playback history range" />
+                    <Label Text="Unlimited shows all playback history available through Emby and may take longer on large libraries." Style="{StaticResource MutedLabel}" />
+                </VerticalStackLayout>
+            </Border>
+
             <HorizontalStackLayout Spacing="10">
                 <Button Text="Save" Clicked="SaveClicked" />
                 <Button Text="Test Connection" Clicked="TestClicked" />
@@ -39,7 +48,7 @@
             <Border Style="{StaticResource CardBorder}">
                 <VerticalStackLayout Spacing="6">
                     <Label Text="Playback Reporting" FontSize="18" FontAttributes="Bold" />
-                    <Label Text="Plugin installed on the server. Detailed Playback Reporting integration is reserved for the next milestone after we confirm the standard Emby activity/session API against your server." Style="{StaticResource MutedLabel}" />
+                    <Label Text="Playback Reporting is installed on the server. EAVdrop currently uses Emby's standard per-user playback data; deeper event-level reporting can be added next." Style="{StaticResource MutedLabel}" />
                 </VerticalStackLayout>
             </Border>
         </VerticalStackLayout>

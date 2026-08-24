@@ -7,6 +7,7 @@ namespace EAVdrop.Pages;
 public partial class ActivityPage : ContentPage
 {
     private readonly EmbyApiClient _api;
+    private readonly SettingsService _settings;
     private List<PlaybackHistoryItem> _all = [];
     private List<UserFilterItem> _users = [];
     private bool _loading;
@@ -15,13 +16,13 @@ public partial class ActivityPage : ContentPage
     {
         InitializeComponent();
         _api = MauiProgram.Services.GetRequiredService<EmbyApiClient>();
+        _settings = MauiProgram.Services.GetRequiredService<SettingsService>();
     }
 
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        if (_all.Count == 0)
-            await LoadAsync();
+        await LoadAsync();
     }
 
     private async void RefreshClicked(object sender, EventArgs e) => await LoadAsync();
@@ -32,7 +33,8 @@ public partial class ActivityPage : ContentPage
     {
         if (_loading) return;
         _loading = true;
-        StatusLabel.Text = "Loading 30-day playback history…";
+        RangeCaptionLabel.Text = $"Playback history — {_settings.HistoryRangeCaption}";
+        StatusLabel.Text = "Loading playback history…";
 
         try
         {
@@ -41,13 +43,13 @@ public partial class ActivityPage : ContentPage
                 .OrderBy(u => u.Name)
                 .ToList();
 
-            var cutoff = DateTimeOffset.Now.AddDays(-30);
+            var cutoff = _settings.GetPlaybackHistoryCutoff();
             var historyTasks = users.Select(async user =>
             {
-                var items = (await _api.GetRecentPlayedItemsAsync(user.Id, 500)).Items;
+                var items = (await _api.GetRecentPlayedItemsAsync(user.Id)).Items;
                 return items
                     .Select(item => new { Item = item, Date = item.UserData?.LastPlayedDate })
-                    .Where(x => x.Date.HasValue && x.Date.Value >= cutoff)
+                    .Where(x => x.Date.HasValue && (!cutoff.HasValue || x.Date.Value >= cutoff.Value))
                     .Select(x => new PlaybackHistoryItem
                     {
                         UserId = user.Id,
@@ -64,10 +66,11 @@ public partial class ActivityPage : ContentPage
                 .OrderByDescending(x => x.PlayedDate)
                 .ToList();
 
+            var previousUserId = (UserPicker.SelectedItem as UserFilterItem)?.Id ?? "";
             _users = [new UserFilterItem("", "All users"), .. users.Select(u => new UserFilterItem(u.Id, u.Name))];
             UserPicker.ItemsSource = _users;
             UserPicker.ItemDisplayBinding = new Binding(nameof(UserFilterItem.Name));
-            UserPicker.SelectedIndex = 0;
+            UserPicker.SelectedItem = _users.FirstOrDefault(u => string.Equals(u.Id, previousUserId, StringComparison.OrdinalIgnoreCase)) ?? _users[0];
             ApplyFilter();
         }
         catch (Exception ex)
@@ -100,7 +103,7 @@ public partial class ActivityPage : ContentPage
 
         var list = query.ToList();
         ActivityView.ItemsSource = list;
-        StatusLabel.Text = $"Showing {list.Count} of {_all.Count} items played in the last 30 days";
+        StatusLabel.Text = $"Showing {list.Count} of {_all.Count} items from {_settings.HistoryRangeCaption}";
     }
 
     private sealed record UserFilterItem(string Id, string Name);

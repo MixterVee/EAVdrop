@@ -34,11 +34,12 @@ public sealed class EmbyApiClient
     public Task<UserQueryResultDto> GetUsersAsync(CancellationToken ct = default) =>
         GetAsync<UserQueryResultDto>("Users/Query?Limit=200&SortOrder=Ascending", ct);
 
-    public Task<UserItemQueryResultDto> GetRecentPlayedItemsAsync(string userId, int limit = 500, CancellationToken ct = default)
+    public Task<UserItemQueryResultDto> GetRecentPlayedItemsAsync(string userId, int? limit = null, CancellationToken ct = default)
     {
         var escapedUserId = Uri.EscapeDataString(userId);
+        var limitPart = limit is > 0 ? $"&Limit={limit.Value}" : "";
         return GetAsync<UserItemQueryResultDto>(
-            $"Users/{escapedUserId}/Items?Recursive=true&SortBy=DatePlayed&SortOrder=Descending&IncludeItemTypes=Movie%2CEpisode%2CVideo%2CAudio&Limit={limit}&Fields=UserDataLastPlayedDate&EnableUserData=true",
+            $"Users/{escapedUserId}/Items?Recursive=true&SortBy=DatePlayed&SortOrder=Descending&IncludeItemTypes=Movie%2CEpisode%2CVideo%2CAudio{limitPart}&Fields=UserDataLastPlayedDate&EnableUserData=true",
             ct);
     }
 
@@ -62,7 +63,7 @@ public sealed class EmbyApiClient
                 request.Headers.TryAddWithoutValidation("X-Emby-Token", token);
                 request.Headers.TryAddWithoutValidation(
                     "X-Emby-Authorization",
-                    $"MediaBrowser Client=\"EAVdrop\", Device=\"{DeviceInfo.Current.Platform}\", DeviceId=\"{_settings.DeviceId}\", Version=\"0.1.2\"");
+                    $"MediaBrowser Client=\"EAVdrop\", Device=\"{DeviceInfo.Current.Platform}\", DeviceId=\"{_settings.DeviceId}\", Version=\"0.1.3\"");
 
                 using var response = await _http.SendAsync(request, timeout.Token);
 

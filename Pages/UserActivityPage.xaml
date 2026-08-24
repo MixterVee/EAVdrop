@@ -6,7 +6,10 @@
     Title="User Activity">
 
     <Grid Padding="18" RowDefinitions="Auto,Auto,Auto,*" RowSpacing="12">
-        <Label x:Name="UserTitle" Text="User" FontSize="28" FontAttributes="Bold" />
+        <VerticalStackLayout Spacing="2">
+            <Label x:Name="UserTitle" Text="User" FontSize="28" FontAttributes="Bold" />
+            <Label x:Name="HistoryRangeLabel" Text="Playback history" Style="{StaticResource MutedLabel}" />
+        </VerticalStackLayout>
 
         <Border Grid.Row="1" Style="{StaticResource CardBorder}">
             <VerticalStackLayout Spacing="5">
@@ -20,7 +23,7 @@
 
         <CollectionView Grid.Row="3" x:Name="ActivityView" SelectionMode="None">
             <CollectionView.EmptyView>
-                <Label Text="Nothing played in the last 30 days." Style="{StaticResource MutedLabel}" HorizontalOptions="Center" Margin="0,40" />
+                <Label Text="No playback in the selected history range." Style="{StaticResource MutedLabel}" HorizontalOptions="Center" Margin="0,40" />
             </CollectionView.EmptyView>
             <CollectionView.ItemTemplate>
                 <DataTemplate>

@@ -15,6 +15,9 @@ public partial class SettingsPage : ContentPage
         _settings = MauiProgram.Services.GetRequiredService<SettingsService>();
         _api = MauiProgram.Services.GetRequiredService<EmbyApiClient>();
         ModePicker.ItemsSource = Enum.GetNames<ConnectionMode>();
+        HistoryRangePicker.ItemsSource = Enum.GetValues<PlaybackHistoryRange>()
+            .Select(SettingsService.GetHistoryRangeSettingLabel)
+            .ToList();
     }
 
     protected override async void OnAppearing()
@@ -24,6 +27,7 @@ public partial class SettingsPage : ContentPage
         LocalUrlEntry.Text = _settings.LocalUrl;
         RemoteUrlEntry.Text = _settings.RemoteUrl;
         ModePicker.SelectedItem = _settings.Mode.ToString();
+        HistoryRangePicker.SelectedIndex = (int)_settings.HistoryRange;
         ApiKeyEntry.Text = await _settings.GetApiKeyAsync();
         _loaded = true;
     }
@@ -61,6 +65,8 @@ public partial class SettingsPage : ContentPage
         _settings.RemoteUrl = RemoteUrlEntry.Text ?? "";
         if (Enum.TryParse<ConnectionMode>(ModePicker.SelectedItem?.ToString(), out var mode))
             _settings.Mode = mode;
+        if (HistoryRangePicker.SelectedIndex >= 0)
+            _settings.HistoryRange = (PlaybackHistoryRange)HistoryRangePicker.SelectedIndex;
         await _settings.SaveApiKeyAsync(ApiKeyEntry.Text ?? "");
     }
 }

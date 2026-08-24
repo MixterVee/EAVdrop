@@ -9,7 +9,7 @@
         <Grid ColumnDefinitions="*,Auto">
             <VerticalStackLayout Spacing="2">
                 <Label Text="Users" FontSize="28" FontAttributes="Bold" />
-                <Label Text="Recent playback — last 30 days" Style="{StaticResource MutedLabel}" />
+                <Label x:Name="RangeCaptionLabel" Text="Recent playback" Style="{StaticResource MutedLabel}" />
             </VerticalStackLayout>
             <Button Grid.Column="1" Text="Refresh" Clicked="RefreshClicked" />
         </Grid>

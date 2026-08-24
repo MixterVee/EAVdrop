@@ -7,19 +7,20 @@ namespace EAVdrop.Pages;
 public partial class UsersPage : ContentPage
 {
     private readonly EmbyApiClient _api;
+    private readonly SettingsService _settings;
     private bool _loading;
 
     public UsersPage()
     {
         InitializeComponent();
         _api = MauiProgram.Services.GetRequiredService<EmbyApiClient>();
+        _settings = MauiProgram.Services.GetRequiredService<SettingsService>();
     }
 
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        if (UsersView.ItemsSource is null)
-            await LoadAsync();
+        await LoadAsync();
     }
 
     private async void RefreshClicked(object sender, EventArgs e) => await LoadAsync();
@@ -28,6 +29,7 @@ public partial class UsersPage : ContentPage
     {
         if (_loading) return;
         _loading = true;
+        RangeCaptionLabel.Text = $"Recent playback — {_settings.HistoryRangeCaption}";
         StatusLabel.Text = "Loading users and playback history…";
 
         try
@@ -41,32 +43,36 @@ public partial class UsersPage : ContentPage
                 .OrderBy(u => u.Name)
                 .ToList();
             var sessions = await sessionsTask;
-            var cutoff = DateTimeOffset.Now.AddDays(-30);
+            var cutoff = _settings.GetPlaybackHistoryCutoff();
 
             var summaryTasks = users.Select(async user =>
             {
+                var history = (await _api.GetRecentPlayedItemsAsync(user.Id)).Items
+                    .Select(item => new { Item = item, Date = item.UserData?.LastPlayedDate })
+                    .Where(x => x.Date.HasValue && (!cutoff.HasValue || x.Date.Value >= cutoff.Value))
+                    .OrderByDescending(x => x.Date)
+                    .ToList();
+
                 var playing = sessions.FirstOrDefault(s =>
                     string.Equals(s.UserId, user.Id, StringComparison.OrdinalIgnoreCase) &&
                     s.NowPlayingItem is not null);
 
+                string summary;
                 if (playing is not null)
                 {
-                    return new UserPlaybackSummary
-                    {
-                        Id = user.Id,
-                        Name = user.Name,
-                        PlaybackSummary = $"Now playing {playing.MediaDisplay}"
-                    };
+                    summary = history.Count > 0
+                        ? $"Now playing {playing.MediaDisplay} • {history.Count} played in {_settings.HistoryRangeCaption}"
+                        : $"Now playing {playing.MediaDisplay}";
                 }
-
-                var recent = (await _api.GetRecentPlayedItemsAsync(user.Id, 1)).Items
-                    .FirstOrDefault(i => i.UserData?.LastPlayedDate is not null);
-
-                string summary;
-                if (recent?.UserData?.LastPlayedDate is DateTimeOffset playedDate && playedDate >= cutoff)
-                    summary = $"Last played {recent.DisplayName} • {playedDate.LocalDateTime:g}";
+                else if (history.FirstOrDefault() is { } recent)
+                {
+                    var countText = history.Count == 1 ? "1 item" : $"{history.Count} items";
+                    summary = $"{countText} • Last played {recent.Item.DisplayName} • {recent.Date!.Value.LocalDateTime:g}";
+                }
                 else
-                    summary = "Nothing played in the last 30 days";
+                {
+                    summary = _settings.NoPlaybackText;
+                }
 
                 return new UserPlaybackSummary
                 {
