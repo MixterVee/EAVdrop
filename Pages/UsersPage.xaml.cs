@@ -47,10 +47,9 @@ public partial class UsersPage : ContentPage
 
             var summaryTasks = users.Select(async user =>
             {
-                var history = (await _api.GetRecentPlayedItemsAsync(user.Id)).Items
-                    .Select(item => new { Item = item, Date = item.UserData?.LastPlayedDate })
-                    .Where(x => x.Date.HasValue && (!cutoff.HasValue || x.Date.Value >= cutoff.Value))
-                    .OrderByDescending(x => x.Date)
+                var history = (await _api.GetPlaybackHistoryItemsAsync(user.Id, cutoff))
+                    .Where(item => item.UserData?.LastPlayedDate is not null)
+                    .OrderByDescending(item => item.UserData!.LastPlayedDate)
                     .ToList();
 
                 var playing = sessions.FirstOrDefault(s =>
@@ -67,7 +66,7 @@ public partial class UsersPage : ContentPage
                 else if (history.FirstOrDefault() is { } recent)
                 {
                     var countText = history.Count == 1 ? "1 item" : $"{history.Count} items";
-                    summary = $"{countText} • Last played {recent.Item.DisplayName} • {recent.Date!.Value.LocalDateTime:g}";
+                    summary = $"{countText} • Last played {recent.DisplayName} • {recent.UserData!.LastPlayedDate!.Value.LocalDateTime:g}";
                 }
                 else
                 {
