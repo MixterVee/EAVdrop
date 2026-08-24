@@ -7,7 +7,7 @@ namespace EAVdrop.Pages;
 public partial class ActivityPage : ContentPage
 {
     private readonly EmbyApiClient _api;
-    private List<ActivityLogEntryDto> _all = [];
+    private List<PlaybackHistoryItem> _all = [];
     private List<UserFilterItem> _users = [];
     private bool _loading;
 
@@ -32,25 +32,39 @@ public partial class ActivityPage : ContentPage
     {
         if (_loading) return;
         _loading = true;
-        StatusLabel.Text = "Loading activity…";
+        StatusLabel.Text = "Loading 30-day playback history…";
 
         try
         {
-            var usersTask = _api.GetUsersAsync();
-            var activityTask = _api.GetActivityAsync(250);
-            await Task.WhenAll(usersTask, activityTask);
-
-            var users = (await usersTask).Items;
-            var lookup = users.ToDictionary(u => u.Id, u => u.Name, StringComparer.OrdinalIgnoreCase);
-
-            _all = (await activityTask).Items
-                .OrderByDescending(a => a.Date)
+            var users = (await _api.GetUsersAsync()).Items
+                .Where(u => u.Policy?.IsDisabled != true)
+                .OrderBy(u => u.Name)
                 .ToList();
 
-            foreach (var entry in _all)
-                entry.UserName = !string.IsNullOrWhiteSpace(entry.UserId) && lookup.TryGetValue(entry.UserId, out var name) ? name : "System";
+            var cutoff = DateTimeOffset.Now.AddDays(-30);
+            var historyTasks = users.Select(async user =>
+            {
+                var items = (await _api.GetRecentPlayedItemsAsync(user.Id, 500)).Items;
+                return items
+                    .Select(item => new { Item = item, Date = item.UserData?.LastPlayedDate })
+                    .Where(x => x.Date.HasValue && x.Date.Value >= cutoff)
+                    .Select(x => new PlaybackHistoryItem
+                    {
+                        UserId = user.Id,
+                        UserName = user.Name,
+                        Title = x.Item.DisplayName,
+                        Type = x.Item.Type ?? "Media",
+                        PlayedDate = x.Date!.Value
+                    })
+                    .ToList();
+            });
 
-            _users = [new UserFilterItem("", "All users"), .. users.OrderBy(u => u.Name).Select(u => new UserFilterItem(u.Id, u.Name))];
+            _all = (await Task.WhenAll(historyTasks))
+                .SelectMany(x => x)
+                .OrderByDescending(x => x.PlayedDate)
+                .ToList();
+
+            _users = [new UserFilterItem("", "All users"), .. users.Select(u => new UserFilterItem(u.Id, u.Name))];
             UserPicker.ItemsSource = _users;
             UserPicker.ItemDisplayBinding = new Binding(nameof(UserFilterItem.Name));
             UserPicker.SelectedIndex = 0;
@@ -69,27 +83,24 @@ public partial class ActivityPage : ContentPage
 
     private void ApplyFilter()
     {
-        if (_all.Count == 0) return;
-
         var selected = UserPicker.SelectedItem as UserFilterItem;
         var search = SearchBox.Text?.Trim();
 
-        IEnumerable<ActivityLogEntryDto> query = _all;
+        IEnumerable<PlaybackHistoryItem> query = _all;
         if (selected is not null && !string.IsNullOrWhiteSpace(selected.Id))
             query = query.Where(a => string.Equals(a.UserId, selected.Id, StringComparison.OrdinalIgnoreCase));
 
         if (!string.IsNullOrWhiteSpace(search))
         {
             query = query.Where(a =>
-                (a.Name?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (a.Detail.Contains(search, StringComparison.OrdinalIgnoreCase)) ||
-                (a.UserName.Contains(search, StringComparison.OrdinalIgnoreCase)) ||
-                (a.Type?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
+                a.Title.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                a.UserName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                a.Type.Contains(search, StringComparison.OrdinalIgnoreCase));
         }
 
         var list = query.ToList();
         ActivityView.ItemsSource = list;
-        StatusLabel.Text = $"Showing {list.Count} of {_all.Count} recent entries";
+        StatusLabel.Text = $"Showing {list.Count} of {_all.Count} items played in the last 30 days";
     }
 
     private sealed record UserFilterItem(string Id, string Name);
