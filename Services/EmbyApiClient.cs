@@ -9,6 +9,7 @@ public sealed class EmbyApiClient
 {
     private readonly SettingsService _settings;
     private readonly HttpClient _http = new();
+    private readonly SemaphoreSlim _historyGate = new(3, 3);
     private readonly JsonSerializerOptions _json = new(JsonSerializerDefaults.Web)
     {
         PropertyNameCaseInsensitive = true
@@ -34,13 +35,51 @@ public sealed class EmbyApiClient
     public Task<UserQueryResultDto> GetUsersAsync(CancellationToken ct = default) =>
         GetAsync<UserQueryResultDto>("Users/Query?Limit=200&SortOrder=Ascending", ct);
 
-    public Task<UserItemQueryResultDto> GetRecentPlayedItemsAsync(string userId, int? limit = null, CancellationToken ct = default)
+    public Task<UserItemQueryResultDto> GetRecentPlayedItemsAsync(string userId, int limit = 250, int startIndex = 0, CancellationToken ct = default)
     {
         var escapedUserId = Uri.EscapeDataString(userId);
-        var limitPart = limit is > 0 ? $"&Limit={limit.Value}" : "";
         return GetAsync<UserItemQueryResultDto>(
-            $"Users/{escapedUserId}/Items?Recursive=true&SortBy=DatePlayed&SortOrder=Descending&IncludeItemTypes=Movie%2CEpisode%2CVideo%2CAudio{limitPart}&Fields=UserDataLastPlayedDate&EnableUserData=true",
+            $"Users/{escapedUserId}/Items?Recursive=true&SortBy=DatePlayed&SortOrder=Descending&IncludeItemTypes=Movie%2CEpisode%2CVideo%2CAudio&Limit={limit}&StartIndex={startIndex}&Fields=UserDataLastPlayedDate&EnableUserData=true",
             ct);
+    }
+
+    public async Task<List<BaseItemDto>> GetPlaybackHistoryItemsAsync(string userId, DateTimeOffset? cutoff, CancellationToken ct = default)
+    {
+        await _historyGate.WaitAsync(ct);
+        try
+        {
+            const int pageSize = 250;
+            var startIndex = 0;
+            var results = new List<BaseItemDto>();
+
+            while (true)
+            {
+                var page = await GetRecentPlayedItemsAsync(userId, pageSize, startIndex, ct);
+                if (page.Items.Count == 0) break;
+
+                var dated = page.Items.Where(i => i.UserData?.LastPlayedDate is not null).ToList();
+                foreach (var item in dated)
+                {
+                    var playedDate = item.UserData!.LastPlayedDate!.Value;
+                    if (!cutoff.HasValue || playedDate >= cutoff.Value)
+                        results.Add(item);
+                }
+
+                var reachedCutoff = cutoff.HasValue && dated.Any(i => i.UserData!.LastPlayedDate!.Value < cutoff.Value);
+                var reachedUnplayedItems = dated.Count < page.Items.Count;
+                startIndex += page.Items.Count;
+
+                if (reachedCutoff || reachedUnplayedItems || page.Items.Count < pageSize ||
+                    (page.TotalRecordCount > 0 && startIndex >= page.TotalRecordCount))
+                    break;
+            }
+
+            return results.OrderByDescending(i => i.UserData!.LastPlayedDate).ToList();
+        }
+        finally
+        {
+            _historyGate.Release();
+        }
     }
 
     private async Task<T> GetAsync<T>(string relativePath, CancellationToken ct)
@@ -56,14 +95,14 @@ public sealed class EmbyApiClient
             try
             {
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                timeout.CancelAfter(TimeSpan.FromSeconds(5));
+                timeout.CancelAfter(TimeSpan.FromSeconds(30));
 
                 var requestUri = BuildUri(baseUrl, relativePath);
                 using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
                 request.Headers.TryAddWithoutValidation("X-Emby-Token", token);
                 request.Headers.TryAddWithoutValidation(
                     "X-Emby-Authorization",
-                    $"MediaBrowser Client=\"EAVdrop\", Device=\"{DeviceInfo.Current.Platform}\", DeviceId=\"{_settings.DeviceId}\", Version=\"0.1.3\"");
+                    $"MediaBrowser Client=\"EAVdrop\", Device=\"{DeviceInfo.Current.Platform}\", DeviceId=\"{_settings.DeviceId}\", Version=\"0.1.5\"");
 
                 using var response = await _http.SendAsync(request, timeout.Token);
 
@@ -77,6 +116,10 @@ public sealed class EmbyApiClient
 
                 LastConnectedBaseUrl = baseUrl;
                 return result;
+            }
+            catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
+            {
+                lastError = new TimeoutException("The Emby request timed out after 30 seconds.", ex);
             }
             catch (Exception ex) when (ex is not UnauthorizedAccessException)
             {
