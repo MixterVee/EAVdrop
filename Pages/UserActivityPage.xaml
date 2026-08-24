@@ -28,13 +28,10 @@
             <CollectionView.ItemTemplate>
                 <DataTemplate>
                     <Border Style="{StaticResource CardBorder}">
-                        <VerticalStackLayout Spacing="4">
-                            <Grid ColumnDefinitions="*,Auto">
-                                <Label Text="{Binding Title}" FontAttributes="Bold" FontSize="17" />
-                                <Label Grid.Column="1" Text="{Binding DateDisplay}" Style="{StaticResource MutedLabel}" />
-                            </Grid>
-                            <Label Text="{Binding Type}" Style="{StaticResource MutedLabel}" />
-                        </VerticalStackLayout>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Text="{Binding Title}" FontAttributes="Bold" FontSize="17" />
+                            <Label Grid.Column="1" Text="{Binding DateDisplay}" Style="{StaticResource MutedLabel}" VerticalTextAlignment="Center" />
+                        </Grid>
                     </Border>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
