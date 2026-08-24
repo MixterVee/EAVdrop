@@ -40,21 +40,20 @@ public partial class UserActivityPage : ContentPage, IQueryAttributable
 
         try
         {
-            var sessionsTask = _api.GetSessionsAsync();
-            var recentPlayedTask = _api.GetRecentPlayedItemsAsync(_userId);
-            await Task.WhenAll(sessionsTask, recentPlayedTask);
-
             var cutoff = _settings.GetPlaybackHistoryCutoff();
-            var playback = (await recentPlayedTask).Items
-                .Select(item => new { Item = item, Date = item.UserData?.LastPlayedDate })
-                .Where(x => x.Date.HasValue && (!cutoff.HasValue || x.Date.Value >= cutoff.Value))
-                .Select(x => new PlaybackHistoryItem
+            var sessionsTask = _api.GetSessionsAsync();
+            var playedItemsTask = _api.GetPlaybackHistoryItemsAsync(_userId, cutoff);
+            await Task.WhenAll(sessionsTask, playedItemsTask);
+
+            var playback = (await playedItemsTask)
+                .Where(item => item.UserData?.LastPlayedDate is not null)
+                .Select(item => new PlaybackHistoryItem
                 {
                     UserId = _userId,
                     UserName = _userName,
-                    Title = x.Item.DisplayName,
-                    Type = x.Item.Type ?? "Media",
-                    PlayedDate = x.Date!.Value
+                    Title = item.DisplayName,
+                    Type = item.Type ?? "Media",
+                    PlayedDate = item.UserData!.LastPlayedDate!.Value
                 })
                 .OrderByDescending(x => x.PlayedDate)
                 .ToList();
