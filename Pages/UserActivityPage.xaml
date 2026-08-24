@@ -10,7 +10,7 @@
 
         <Border Grid.Row="1" Style="{StaticResource CardBorder}">
             <VerticalStackLayout Spacing="5">
-                <Label x:Name="SummaryTitleLabel" Text="Last Activity" FontAttributes="Bold" TextColor="{StaticResource EavAccent}" />
+                <Label x:Name="SummaryTitleLabel" Text="Last Played" FontAttributes="Bold" TextColor="{StaticResource EavAccent}" />
                 <Label x:Name="SummaryMainLabel" Text="Loading…" FontSize="18" />
                 <Label x:Name="SummaryDetailLabel" Style="{StaticResource MutedLabel}" />
             </VerticalStackLayout>
@@ -20,17 +20,16 @@
 
         <CollectionView Grid.Row="3" x:Name="ActivityView" SelectionMode="None">
             <CollectionView.EmptyView>
-                <Label Text="No recent activity for this user." Style="{StaticResource MutedLabel}" HorizontalOptions="Center" Margin="0,40" />
+                <Label Text="Nothing played in the last 30 days." Style="{StaticResource MutedLabel}" HorizontalOptions="Center" Margin="0,40" />
             </CollectionView.EmptyView>
             <CollectionView.ItemTemplate>
                 <DataTemplate>
                     <Border Style="{StaticResource CardBorder}">
                         <VerticalStackLayout Spacing="4">
                             <Grid ColumnDefinitions="*,Auto">
-                                <Label Text="{Binding Name}" FontAttributes="Bold" FontSize="17" />
+                                <Label Text="{Binding Title}" FontAttributes="Bold" FontSize="17" />
                                 <Label Grid.Column="1" Text="{Binding DateDisplay}" Style="{StaticResource MutedLabel}" />
                             </Grid>
-                            <Label Text="{Binding Detail}" />
                             <Label Text="{Binding Type}" Style="{StaticResource MutedLabel}" />
                         </VerticalStackLayout>
                     </Border>
