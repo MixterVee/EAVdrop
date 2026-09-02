@@ -7,6 +7,7 @@ public partial class DashboardPage : ContentPage
 {
     private readonly EmbyApiClient _api;
     private bool _loading;
+    private CancellationTokenSource? _refreshCts;
 
     public DashboardPage()
     {
@@ -17,10 +18,36 @@ public partial class DashboardPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+        _refreshCts?.Cancel();
+        _refreshCts = new CancellationTokenSource();
         await LoadAsync();
+        _ = AutoRefreshAsync(_refreshCts.Token);
+    }
+
+    protected override void OnDisappearing()
+    {
+        _refreshCts?.Cancel();
+        _refreshCts?.Dispose();
+        _refreshCts = null;
+        base.OnDisappearing();
     }
 
     private async void RefreshClicked(object sender, EventArgs e) => await LoadAsync();
+
+    private async Task AutoRefreshAsync(CancellationToken ct)
+    {
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(10), ct);
+                await MainThread.InvokeOnMainThreadAsync(LoadAsync);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
 
     private async Task LoadAsync()
     {
@@ -44,7 +71,7 @@ public partial class DashboardPage : ContentPage
             SessionsView.ItemsSource = active;
             EmptyLabel.IsVisible = active.Count == 0;
             ConnectionLabel.Text = $"{info.ServerName ?? "Emby"} • {info.Version ?? "Unknown version"} • {_api.LastConnectedBaseUrl}";
-            StatusLabel.Text = active.Count == 1 ? "1 active playback session" : $"{active.Count} active playback sessions";
+            StatusLabel.Text = active.Count == 1 ? "1 active playback session • live" : $"{active.Count} active playback sessions • live";
         }
         catch (Exception ex)
         {
