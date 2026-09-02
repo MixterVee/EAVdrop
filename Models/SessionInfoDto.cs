@@ -7,6 +7,7 @@ public sealed class SessionInfoDto
     public string? UserName { get; set; }
     public string? Client { get; set; }
     public string? DeviceName { get; set; }
+    public string? RemoteEndPoint { get; set; }
     public DateTimeOffset? LastActivityDate { get; set; }
     public BaseItemDto? NowPlayingItem { get; set; }
     public PlayerStateInfoDto? PlayState { get; set; }
@@ -20,13 +21,33 @@ public sealed class SessionInfoDto
         ? Math.Clamp((double)(PlayState?.PositionTicks ?? 0) / NowPlayingItem.RunTimeTicks.Value, 0, 1)
         : 0;
     public string ProgressText => NowPlayingItem?.RunTimeTicks > 0
-        ? $"{FormatTicks(PlayState?.PositionTicks)} / {FormatTicks(NowPlayingItem.RunTimeTicks)}"
+        ? $"{FormatTicks(PlayState?.PositionTicks)} / {FormatTicks(NowPlayingItem.RunTimeTicks)} • {Progress:P0}"
         : FormatTicks(PlayState?.PositionTicks);
     public string PlaybackMethod => PlayState?.IsPaused == true
         ? "Paused"
         : TranscodingInfo is not null
             ? "Transcoding"
             : PlayState?.PlayMethod ?? "Playing";
+    public string StreamDetails
+    {
+        get
+        {
+            if (TranscodingInfo is null)
+                return PlayState?.PlayMethod is { Length: > 0 } method ? method : "Direct playback";
+
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(TranscodingInfo.Container)) parts.Add(TranscodingInfo.Container.ToUpperInvariant());
+            if (!string.IsNullOrWhiteSpace(TranscodingInfo.VideoCodec)) parts.Add(TranscodingInfo.VideoCodec.ToUpperInvariant());
+            if (!string.IsNullOrWhiteSpace(TranscodingInfo.AudioCodec)) parts.Add(TranscodingInfo.AudioCodec.ToUpperInvariant());
+            if (TranscodingInfo.Bitrate is > 0) parts.Add(FormatBitrate(TranscodingInfo.Bitrate.Value));
+            return parts.Count > 0 ? string.Join(" • ", parts) : "Transcoding";
+        }
+    }
+    public string EndpointDisplay => string.IsNullOrWhiteSpace(RemoteEndPoint) ? "" : $"Connection • {RemoteEndPoint}";
+
+    private static string FormatBitrate(int bitrate) => bitrate >= 1_000_000
+        ? $"{bitrate / 1_000_000d:0.#} Mbps"
+        : $"{bitrate / 1000d:0} kbps";
 
     private static string FormatTicks(long? ticks)
     {
