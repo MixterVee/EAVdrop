@@ -1,0 +1,1 @@
+EAVdrop app icon binary assets are committed directly. Do not reconstruct them in GitHub Actions.
