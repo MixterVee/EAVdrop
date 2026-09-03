@@ -1,9 +1,50 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-  <g fill="#52B93F">
-    <path d="M64 18 L90 31 L82 43 L64 34 L46 43 L38 31 Z"/>
-    <path d="M97 38 L110 64 L97 90 L85 82 L94 64 L85 46 Z"/>
-    <path d="M64 110 L38 97 L46 85 L64 94 L82 85 L90 97 Z"/>
-    <path d="M31 90 L18 64 L31 38 L43 46 L34 64 L43 82 Z"/>
-    <path d="M64 47 C64 47 79 62 79 76 C79 86 72 93 64 93 C56 93 49 86 49 76 C49 62 64 47 64 47 Z"/>
-  </g>
+  <defs>
+    <linearGradient id="panelTop" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#96F52D"/>
+      <stop offset="0.48" stop-color="#43DD61"/>
+      <stop offset="1" stop-color="#0695A8"/>
+    </linearGradient>
+    <linearGradient id="panelSide" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#69EA37"/>
+      <stop offset="0.5" stop-color="#1BCB87"/>
+      <stop offset="1" stop-color="#087D9C"/>
+    </linearGradient>
+    <linearGradient id="panelBottom" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#28D09A"/>
+      <stop offset="1" stop-color="#087B9F"/>
+    </linearGradient>
+    <linearGradient id="dropFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8BF12D"/>
+      <stop offset="0.42" stop-color="#16CE8D"/>
+      <stop offset="1" stop-color="#075F88"/>
+    </linearGradient>
+    <linearGradient id="dropStroke" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#D6FF7A"/>
+      <stop offset="0.55" stop-color="#6CF06D"/>
+      <stop offset="1" stop-color="#27D9B0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Emby-inspired layered diamond -->
+  <path d="M64 7 C68 7 71 9 74 12 L111 49 C115 53 115 59 111 63 L94 80 L64 50 L34 80 L17 63 C13 59 13 53 17 49 L54 12 C57 9 60 7 64 7 Z"
+        fill="url(#panelTop)" stroke="#0B7A86" stroke-width="1.2"/>
+  <path d="M17 49 C20 46 24 45 28 46 L64 64 L46 100 L12 66 C8 62 8 56 12 52 Z"
+        fill="url(#panelSide)" stroke="#087488" stroke-width="1.2"/>
+  <path d="M111 49 C108 46 104 45 100 46 L64 64 L82 100 L116 66 C120 62 120 56 116 52 Z"
+        fill="url(#panelSide)" stroke="#087488" stroke-width="1.2"/>
+  <path d="M28 82 L64 64 L100 82 L74 116 C71 120 68 121 64 121 C60 121 57 120 54 116 Z"
+        fill="url(#panelBottom)" stroke="#076D85" stroke-width="1.2"/>
+
+  <!-- darker inner diamond to give the layered depth -->
+  <path d="M64 35 L94 64 L64 94 L34 64 Z" fill="#074758" opacity="0.96"/>
+  <path d="M64 39 L89 64 L64 89 L39 64 Z" fill="#083F4D" opacity="0.78"/>
+
+  <!-- EAVdrop teardrop -->
+  <path d="M64 43 C64 43 83 61 83 78 C83 91 75 101 64 101 C53 101 45 91 45 78 C45 61 64 43 64 43 Z"
+        fill="url(#dropFill)" stroke="url(#dropStroke)" stroke-width="4"/>
+  <path d="M58 55 C51 64 49 72 49 79 C49 83 50 87 52 90 C51 80 55 67 65 55 C62 53 60 53 58 55 Z"
+        fill="#E8FF9B" opacity="0.76"/>
+  <path d="M49 87 C53 95 58 98 64 98 C72 98 78 93 80 85 C76 91 70 94 63 94 C57 94 53 92 49 87 Z"
+        fill="#0A7D86" opacity="0.34"/>
 </svg>
