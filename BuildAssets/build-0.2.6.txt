@@ -1,0 +1,2 @@
+EAVdrop 0.2.6 build 13
+Approved glossy blue-green EAVdrop icon committed directly as Resources/AppIcon/appicon.png.
