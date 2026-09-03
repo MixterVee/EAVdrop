@@ -11,22 +11,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Restore approved app icon
-        shell: pwsh
-        run: |
-          $parts = @(
-            'BuildAssets/appicon.b64.00',
-            'BuildAssets/appicon.b64.01',
-            'BuildAssets/appicon.b64.02'
-          )
-          $encoded = ($parts | ForEach-Object { [IO.File]::ReadAllText($_).Trim() }) -join ''
-          $bytes = [Convert]::FromBase64String($encoded)
-          New-Item -ItemType Directory -Force -Path Resources/AppIcon | Out-Null
-          [IO.File]::WriteAllBytes('Resources/AppIcon/appicon.png', $bytes)
-          $hash = (Get-FileHash Resources/AppIcon/appicon.png -Algorithm SHA256).Hash.ToLower()
-          if ($hash -ne '6b65209cfe3a551c265638182f2e2cb0cb1d83e90f5cc6b9233252fab93efdfb') { throw "Icon hash mismatch: $hash" }
-          Write-Host "Approved icon verified: $hash"
-
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
@@ -56,32 +40,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Restore approved app icon
-        shell: pwsh
-        run: |
-          $parts = @(
-            'BuildAssets/appicon.b64.00',
-            'BuildAssets/appicon.b64.01',
-            'BuildAssets/appicon.b64.02'
-          )
-          $encoded = ($parts | ForEach-Object { [IO.File]::ReadAllText($_).Trim() }) -join ''
-          $bytes = [Convert]::FromBase64String($encoded)
-          New-Item -ItemType Directory -Force -Path Resources/AppIcon | Out-Null
-          [IO.File]::WriteAllBytes('Resources/AppIcon/appicon.png', $bytes)
-          $hash = (Get-FileHash Resources/AppIcon/appicon.png -Algorithm SHA256).Hash.ToLower()
-          if ($hash -ne '6b65209cfe3a551c265638182f2e2cb0cb1d83e90f5cc6b9233252fab93efdfb') { throw "Icon hash mismatch: $hash" }
-          Write-Host "Approved icon verified: $hash"
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Generate Windows ICO
+      - name: Generate Windows ICO from approved icon
         shell: pwsh
         run: |
           python -m pip install --disable-pip-version-check pillow
-          python -c "from PIL import Image; i=Image.open('Resources/AppIcon/appicon.png').convert('RGBA'); i.save('appicon.ico', format='ICO', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128)]); print('ICO generated from approved icon:', i.size)"
+          python -c "from PIL import Image; i=Image.open('Resources/AppIcon/appicon.png').convert('RGBA'); i.save('appicon.ico', format='ICO', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(96,96)]); print('ICO generated from committed icon:', i.size)"
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
