@@ -1,0 +1,1 @@
+Deprecated icon reconstruction pipeline. App icons are committed directly as binary assets.
