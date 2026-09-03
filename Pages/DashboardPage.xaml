@@ -38,8 +38,30 @@
                                         <Label Text="{Binding PlaybackMethod}" TextColor="{StaticResource EavAccent}" FontAttributes="Bold" FontSize="12" />
                                     </Border>
                                 </Grid>
+
                                 <Label Text="{Binding MediaDisplay}" FontSize="18" FontAttributes="Bold" />
                                 <Label Text="{Binding DeviceDisplay}" Style="{StaticResource MutedLabel}" />
+
+                                <FlexLayout Direction="Row"
+                                            Wrap="Wrap"
+                                            JustifyContent="Start"
+                                            AlignItems="Start"
+                                            BindableLayout.ItemsSource="{Binding QualityBadges}">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Stroke="{StaticResource EavAccent}"
+                                                    StrokeThickness="1"
+                                                    Padding="7,3"
+                                                    Margin="0,0,6,4">
+                                                <Label Text="{Binding .}"
+                                                       TextColor="{StaticResource EavAccent}"
+                                                       FontSize="11"
+                                                       FontAttributes="Bold" />
+                                            </Border>
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </FlexLayout>
+
                                 <ProgressBar Progress="{Binding Progress}" ProgressColor="{StaticResource EavAccent}" HeightRequest="8" />
                                 <Label Text="{Binding ProgressText}" Style="{StaticResource MutedLabel}" HorizontalTextAlignment="End" />
                                 <BoxView HeightRequest="1" Opacity="0.2" />
