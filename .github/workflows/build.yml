@@ -11,17 +11,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Prepare approved app icon
-        shell: pwsh
-        run: |
-          python -m pip install --disable-pip-version-check pillow
-          python BuildAssets/prepare_icon.py
-
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
@@ -56,11 +45,11 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Prepare approved app icon
+      - name: Generate Windows ICO from approved PNG
         shell: pwsh
         run: |
           python -m pip install --disable-pip-version-check pillow
-          python BuildAssets/prepare_icon.py
+          python -c "from PIL import Image; p='Resources/AppIcon/eavdrop-approved.png'; i=Image.open(p).convert('RGBA'); i.save('appicon.ico', format='ICO', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)]); print('Approved icon OK:', i.size)"
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
