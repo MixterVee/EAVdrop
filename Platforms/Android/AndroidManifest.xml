@@ -8,7 +8,7 @@
         android:allowBackup="true"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
-        android:icon="@mipmap/appicon"
-        android:roundIcon="@mipmap/appicon_round">
+        android:icon="@mipmap/eavdrop_icon"
+        android:roundIcon="@mipmap/eavdrop_icon">
     </application>
 </manifest>
