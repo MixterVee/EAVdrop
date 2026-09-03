@@ -1,0 +1,1 @@
+EAVdrop approved app icon master is committed as binary PNG/ICO resources. Do not replace it with a hand-recreated SVG. The approved design is the glossy blue-green layered diamond with the centered teardrop.
