@@ -7,33 +7,30 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD_ASSETS = ROOT / "BuildAssets"
+SOURCE_B64 = BUILD_ASSETS / "eavdrop-approved.webp.b64"
 MASTER = ROOT / "Resources" / "AppIcon" / "eavdrop-approved.png"
 ICO = ROOT / "appicon.ico"
 
-# The approved glossy blue-green EAVdrop artwork is stored losslessly as
-# ordered base64 chunks so the GitHub connector never has to reinterpret it.
-chunks = sorted(BUILD_ASSETS.glob("eavdrop-approved.png.b64.*"))
-if not chunks:
-    raise RuntimeError("Approved EAVdrop icon data is missing.")
+if not SOURCE_B64.exists():
+    raise RuntimeError("Verified approved EAVdrop icon source is missing.")
 
-encoded = "".join(p.read_text(encoding="ascii").strip() for p in chunks)
-raw = base64.b64decode(encoded)
-MASTER.parent.mkdir(parents=True, exist_ok=True)
-MASTER.write_bytes(raw)
+raw = base64.b64decode(SOURCE_B64.read_text(encoding="ascii").strip())
 
 with Image.open(BytesIO(raw)) as src:
     src = src.convert("RGBA")
 
-    # Windows ICO, all derived from the exact same artwork.
+    MASTER.parent.mkdir(parents=True, exist_ok=True)
+    src.save(MASTER, format="PNG", optimize=True)
+
+    # Windows multi-size icon from the exact same approved artwork.
     src.save(
         ICO,
         format="ICO",
         sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)],
     )
 
-    # Android legacy transparent launcher PNGs. This deliberately bypasses
-    # adaptive foreground/background recomposition so the launcher sees the
-    # approved artwork as one image.
+    # Android launcher icons. Generate the exact resource names referenced by
+    # AndroidManifest.xml so no MAUI-generated SVG approximation is involved.
     densities = {
         "mipmap-mdpi": 48,
         "mipmap-hdpi": 72,
@@ -41,11 +38,12 @@ with Image.open(BytesIO(raw)) as src:
         "mipmap-xxhdpi": 144,
         "mipmap-xxxhdpi": 192,
     }
+
     for folder, size in densities.items():
         dst_dir = ROOT / "Platforms" / "Android" / "Resources" / folder
         dst_dir.mkdir(parents=True, exist_ok=True)
-        src.resize((size, size), Image.Resampling.LANCZOS).save(
-            dst_dir / "eavdrop_icon.png", optimize=True
-        )
+        icon = src.resize((size, size), Image.Resampling.LANCZOS)
+        icon.save(dst_dir / "appicon.png", optimize=True)
+        icon.save(dst_dir / "appicon_round.png", optimize=True)
 
-print("Prepared exact approved EAVdrop icon assets.")
+print("Prepared verified approved EAVdrop icon assets.")
