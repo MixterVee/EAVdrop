@@ -10,11 +10,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <UseMaterial3>true</UseMaterial3>
+    <AndroidUseLegacyIconGeneration>true</AndroidUseLegacyIconGeneration>
 
     <ApplicationTitle>EAVdrop</ApplicationTitle>
     <ApplicationId>com.eavdrop.viewer</ApplicationId>
-    <ApplicationDisplayVersion>0.2.0</ApplicationDisplayVersion>
-    <ApplicationVersion>7</ApplicationVersion>
+    <ApplicationDisplayVersion>0.2.1</ApplicationDisplayVersion>
+    <ApplicationVersion>8</ApplicationVersion>
 
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
