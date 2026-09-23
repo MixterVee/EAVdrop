@@ -134,6 +134,45 @@ public sealed class EmbyApiClient
     public Task<List<SessionInfoDto>> GetSessionsAsync(CancellationToken ct = default) =>
         GetAsync<List<SessionInfoDto>>("Sessions", ct);
 
+    public Task<List<SessionInfoDto>> GetControllableSessionsAsync(CancellationToken ct = default)
+    {
+        var userId = Uri.EscapeDataString(_settings.AuthenticatedUserId ?? "");
+        return GetAsync<List<SessionInfoDto>>($"Sessions?ControllableByUserId={userId}", ct);
+    }
+
+    public Task PlayOnSessionAsync(
+        string sessionId,
+        string itemId,
+        long startPositionTicks,
+        CancellationToken ct = default)
+    {
+        var path =
+            $"Sessions/{Uri.EscapeDataString(sessionId)}/Playing" +
+            $"?ItemIds={Uri.EscapeDataString(itemId)}" +
+            $"&PlayCommand=PlayNow" +
+            $"&StartPositionTicks={Math.Max(0, startPositionTicks)}";
+
+        return PostAsync(path, new
+        {
+            ControllingUserId = _settings.AuthenticatedUserId
+        }, ct);
+    }
+
+    public Task SendPlayStateCommandAsync(
+        string sessionId,
+        string command,
+        long? seekPositionTicks = null,
+        CancellationToken ct = default)
+    {
+        var path =
+            $"Sessions/{Uri.EscapeDataString(sessionId)}/Playing/{Uri.EscapeDataString(command)}";
+
+        if (seekPositionTicks.HasValue)
+            path += $"?SeekPositionTicks={Math.Max(0, seekPositionTicks.Value)}";
+
+        return PostAsync(path, body: null, ct);
+    }
+
     public Task<ActivityLogResultDto> GetActivityAsync(int limit = 200, CancellationToken ct = default) =>
         GetAsync<ActivityLogResultDto>($"System/ActivityLog/Entries?Limit={limit}", ct);
 
@@ -185,6 +224,66 @@ public sealed class EmbyApiClient
         {
             _historyGate.Release();
         }
+    }
+
+    private async Task PostAsync(string relativePath, object? body, CancellationToken ct)
+    {
+        var token = await _settings.GetAccessTokenAsync();
+        if (string.IsNullOrWhiteSpace(token))
+            throw new InvalidOperationException("You are not signed in to Emby. Open Settings and sign in first.");
+
+        Exception? lastError = null;
+        var authenticationRejected = false;
+
+        foreach (var baseUrl in _settings.GetCandidateUrls())
+        {
+            try
+            {
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                timeout.CancelAfter(TimeSpan.FromSeconds(30));
+
+                using var request = new HttpRequestMessage(HttpMethod.Post, BuildUri(baseUrl, relativePath));
+                request.Headers.TryAddWithoutValidation("X-Emby-Token", token);
+                request.Headers.TryAddWithoutValidation(
+                    "X-Emby-Authorization",
+                    BuildAuthorizationHeader(_settings.AuthenticatedUserId));
+
+                if (body is not null)
+                    request.Content = JsonContent.Create(body);
+
+                using var response = await _http.SendAsync(request, timeout.Token);
+
+                if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                {
+                    authenticationRejected = true;
+                    lastError = new UnauthorizedAccessException("The saved Emby sign-in was rejected.");
+                    continue;
+                }
+
+                response.EnsureSuccessStatusCode();
+                LastConnectedBaseUrl = baseUrl;
+                return;
+            }
+            catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
+            {
+                lastError = new TimeoutException("The Emby request timed out after 30 seconds.", ex);
+            }
+            catch (Exception ex) when (ex is not UnauthorizedAccessException)
+            {
+                lastError = ex;
+            }
+        }
+
+        if (authenticationRejected && lastError is UnauthorizedAccessException)
+        {
+            await _settings.ClearAuthenticationAsync();
+            throw new UnauthorizedAccessException("Your Emby sign-in has expired or was revoked. Open Settings and sign in again.");
+        }
+
+        if (lastError is not null)
+            throw new InvalidOperationException($"Unable to send command to Emby. {lastError.Message}", lastError);
+
+        throw new InvalidOperationException("No Emby server URL is configured.");
     }
 
     private async Task<T> GetAsync<T>(string relativePath, CancellationToken ct)
