@@ -5,7 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     Title="Sync'EM up">
 
-    <Grid Padding="18" RowDefinitions="Auto,Auto,Auto,*,Auto" RowSpacing="14">
+    <Grid Padding="18" RowDefinitions="Auto,Auto,*" RowSpacing="14">
         <Grid ColumnDefinitions="*,Auto">
             <VerticalStackLayout Spacing="2">
                 <Label Text="Sync'EM up" FontSize="28" FontAttributes="Bold" />
@@ -31,17 +31,24 @@
             </VerticalStackLayout>
         </Border>
 
-        <Border Grid.Row="2" Style="{StaticResource CardBorder}">
-            <VerticalStackLayout Spacing="6">
-                <Label Text="2. Choose participant devices" FontSize="19" FontAttributes="Bold" />
-                <Label Text="Select one or more other Emby sessions. Devices reported as controllable are preferred, but Sync'EM up will also let us test an idle session that Emby still reports."
-                       Style="{StaticResource MutedLabel}" />
-            </VerticalStackLayout>
-        </Border>
-
         <CollectionView x:Name="ParticipantsView"
-                        Grid.Row="3"
-                        SelectionMode="Multiple">
+                        Grid.Row="2"
+                        SelectionMode="Multiple"
+                        VerticalOptions="Fill">
+            <CollectionView.ItemsLayout>
+                <LinearItemsLayout Orientation="Vertical" ItemSpacing="10" />
+            </CollectionView.ItemsLayout>
+
+            <CollectionView.Header>
+                <Border Style="{StaticResource CardBorder}" Margin="0,0,0,10">
+                    <VerticalStackLayout Spacing="6">
+                        <Label Text="2. Choose participant devices" FontSize="19" FontAttributes="Bold" />
+                        <Label Text="Select one or more other Emby sessions. Devices reported as controllable are preferred, but Sync'EM up will also let us test an idle session that Emby still reports."
+                               Style="{StaticResource MutedLabel}" />
+                    </VerticalStackLayout>
+                </Border>
+            </CollectionView.Header>
+
             <CollectionView.EmptyView>
                 <Label Text="Emby is not reporting any other session. Open Emby on the second device, interact with it once, then press Refresh."
                        Style="{StaticResource MutedLabel}"
@@ -49,6 +56,7 @@
                        HorizontalOptions="Center"
                        VerticalOptions="Center" />
             </CollectionView.EmptyView>
+
             <CollectionView.ItemTemplate>
                 <DataTemplate>
                     <Border Style="{StaticResource CardBorder}">
@@ -69,27 +77,29 @@
                     </Border>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
-        </CollectionView>
 
-        <Border Grid.Row="4" Style="{StaticResource CardBorder}">
-            <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10" RowSpacing="8">
-                <Label x:Name="StatusLabel"
-                       Text="Not syncing"
-                       VerticalTextAlignment="Center" />
-                <Button x:Name="StartButton"
-                        Grid.Column="1"
-                        Text="Start Together"
-                        Clicked="StartClicked" />
-                <Button x:Name="StopButton"
-                        Grid.Column="2"
-                        Text="Stop Sync"
-                        Clicked="StopClicked"
-                        IsEnabled="False" />
-                <Label Grid.Row="1"
-                       Grid.ColumnSpan="3"
-                       Text="Sync'EM up mirrors pause/unpause and seek changes from the host and corrects noticeable playback drift."
-                       Style="{StaticResource MutedLabel}" />
-            </Grid>
-        </Border>
+            <CollectionView.Footer>
+                <Border Style="{StaticResource CardBorder}" Margin="0,10,0,0">
+                    <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10" RowSpacing="8">
+                        <Label x:Name="StatusLabel"
+                               Text="Not syncing"
+                               VerticalTextAlignment="Center" />
+                        <Button x:Name="StartButton"
+                                Grid.Column="1"
+                                Text="Start Together"
+                                Clicked="StartClicked" />
+                        <Button x:Name="StopButton"
+                                Grid.Column="2"
+                                Text="Stop Sync"
+                                Clicked="StopClicked"
+                                IsEnabled="False" />
+                        <Label Grid.Row="1"
+                               Grid.ColumnSpan="3"
+                               Text="Sync'EM up mirrors pause/unpause and seek changes from the host and corrects noticeable playback drift."
+                               Style="{StaticResource MutedLabel}" />
+                    </Grid>
+                </Border>
+            </CollectionView.Footer>
+        </CollectionView>
     </Grid>
 </ContentPage>
