@@ -19,9 +19,16 @@ public partial class DashboardPage : ContentPage
     {
         base.OnAppearing();
         _refreshCts?.Cancel();
-        _refreshCts = new CancellationTokenSource();
+        var refreshCts = new CancellationTokenSource();
+        _refreshCts = refreshCts;
+
         await LoadAsync();
-        _ = AutoRefreshAsync(_refreshCts.Token);
+
+        // On a fresh install AppShell can redirect from Dashboard to Settings while
+        // the first load is still awaiting. OnDisappearing then clears _refreshCts,
+        // so only start auto-refresh if this page is still the active owner.
+        if (ReferenceEquals(_refreshCts, refreshCts) && !refreshCts.IsCancellationRequested)
+            _ = AutoRefreshAsync(refreshCts.Token);
     }
 
     protected override void OnDisappearing()
