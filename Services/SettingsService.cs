@@ -29,7 +29,7 @@ public sealed class SettingsService
 
     public string LocalUrl
     {
-        get => Preferences.Default.Get(LocalUrlKey, "http://192.168.1.188:19096");
+        get => Preferences.Default.Get(LocalUrlKey, "");
         set => Preferences.Default.Set(LocalUrlKey, value.Trim());
     }
 
