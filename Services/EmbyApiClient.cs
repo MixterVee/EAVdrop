@@ -7,7 +7,7 @@ namespace EAVdrop.Services;
 
 public sealed class EmbyApiClient
 {
-    private const string AppVersion = "0.3.0";
+    private const string AppVersion = "0.3.1";
 
     private readonly SettingsService _settings;
     private readonly HttpClient _http = new();
@@ -43,10 +43,10 @@ public sealed class EmbyApiClient
                 var requestUri = BuildUri(baseUrl, "Users/AuthenticateByName");
                 using var request = new HttpRequestMessage(HttpMethod.Post, requestUri);
                 request.Headers.TryAddWithoutValidation("X-Emby-Authorization", BuildAuthorizationHeader());
-                request.Content = JsonContent.Create(new
+                request.Content = new FormUrlEncodedContent(new Dictionary<string, string>
                 {
-                    Username = username,
-                    Pw = password
+                    ["Username"] = username,
+                    ["Pw"] = password
                 });
 
                 using var response = await _http.SendAsync(request, timeout.Token);
@@ -252,7 +252,7 @@ public sealed class EmbyApiClient
     private string BuildAuthorizationHeader(string? userId = null)
     {
         var userPart = string.IsNullOrWhiteSpace(userId) ? "" : $"UserId=\"{userId}\", ";
-        return $"MediaBrowser {userPart}Client=\"EAVdrop\", Device=\"{DeviceInfo.Current.Platform}\", DeviceId=\"{_settings.DeviceId}\", Version=\"{AppVersion}\"";
+        return $"Emby {userPart}Client=\"EAVdrop\", Device=\"{DeviceInfo.Current.Platform}\", DeviceId=\"{_settings.DeviceId}\", Version=\"{AppVersion}\"";
     }
 
     private static Uri BuildUri(string baseUrl, string relativePath)
