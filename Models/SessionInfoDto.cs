@@ -12,6 +12,8 @@ public sealed class SessionInfoDto
     public BaseItemDto? NowPlayingItem { get; set; }
     public PlayerStateInfoDto? PlayState { get; set; }
     public TranscodingInfoDto? TranscodingInfo { get; set; }
+    public bool SupportsRemoteControl { get; set; }
+    public List<string> SupportedCommands { get; set; } = [];
 
     public string UserDisplay => string.IsNullOrWhiteSpace(UserName) ? "Unknown user" : UserName;
     public string DeviceDisplay => string.Join(" • ", new[] { DeviceName, Client }.Where(x => !string.IsNullOrWhiteSpace(x)));
@@ -63,6 +65,8 @@ public sealed class SessionInfoDto
     }
 
     public string EndpointDisplay => string.IsNullOrWhiteSpace(RemoteEndPoint) ? "" : $"Connection • {RemoteEndPoint}";
+    public string SyncDisplay => $"{UserDisplay} • {DeviceDisplay}" + (IsPlaying ? $" • {MediaDisplay}" : " • Idle");
+    public bool IsSyncControllable => !string.IsNullOrWhiteSpace(Id) && SupportsRemoteControl;
 
     private static void AddUnique(List<string> badges, string? value)
     {
@@ -210,6 +214,7 @@ public sealed class UserItemDataDto
 public sealed class PlayerStateInfoDto
 {
     public long? PositionTicks { get; set; }
+    public bool? CanSeek { get; set; }
     public bool? IsPaused { get; set; }
     public bool? IsMuted { get; set; }
     public string? PlayMethod { get; set; }
