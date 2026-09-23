@@ -13,6 +13,7 @@
         <ShellContent Title="Dashboard" Route="dashboard" ContentTemplate="{DataTemplate pages:DashboardPage}" />
         <ShellContent Title="Activity" Route="activity" ContentTemplate="{DataTemplate pages:ActivityPage}" />
         <ShellContent Title="Users" Route="users" ContentTemplate="{DataTemplate pages:UsersPage}" />
+        <ShellContent Title="Sync'EM up" Route="sync" ContentTemplate="{DataTemplate pages:SyncPage}" />
         <ShellContent Title="Settings" Route="settings" ContentTemplate="{DataTemplate pages:SettingsPage}" />
     </TabBar>
 </Shell>
