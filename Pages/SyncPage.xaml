@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="EAVdrop.Pages.SyncPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    Title="Sync'EM up">
+
+    <Grid Padding="18" RowDefinitions="Auto,Auto,Auto,*,Auto" RowSpacing="14">
+        <Grid ColumnDefinitions="*,Auto">
+            <VerticalStackLayout Spacing="2">
+                <Label Text="Sync'EM up" FontSize="28" FontAttributes="Bold" />
+                <Label Text="Watch together, stay together." Style="{StaticResource MutedLabel}" />
+            </VerticalStackLayout>
+            <Button Grid.Column="1"
+                    Text="Refresh"
+                    Clicked="RefreshClicked"
+                    VerticalOptions="Center" />
+        </Grid>
+
+        <Border Grid.Row="1" Style="{StaticResource CardBorder}">
+            <VerticalStackLayout Spacing="10">
+                <Label Text="1. Choose the host" FontSize="19" FontAttributes="Bold" />
+                <Label Text="Start the movie or episode normally on one Emby device, then select that active session here."
+                       Style="{StaticResource MutedLabel}" />
+                <Picker x:Name="HostPicker"
+                        Title="Choose currently playing host"
+                        SelectedIndexChanged="HostChanged" />
+                <Label x:Name="HostMediaLabel"
+                       Text="No host selected"
+                       Style="{StaticResource MutedLabel}" />
+            </VerticalStackLayout>
+        </Border>
+
+        <Border Grid.Row="2" Style="{StaticResource CardBorder}">
+            <VerticalStackLayout Spacing="6">
+                <Label Text="2. Choose participant devices" FontSize="19" FontAttributes="Bold" />
+                <Label Text="Select one or more controllable Emby sessions. They will stream the same server media independently."
+                       Style="{StaticResource MutedLabel}" />
+            </VerticalStackLayout>
+        </Border>
+
+        <CollectionView x:Name="ParticipantsView"
+                        Grid.Row="3"
+                        SelectionMode="Multiple">
+            <CollectionView.EmptyView>
+                <Label Text="No other remotely controllable Emby devices are online."
+                       Style="{StaticResource MutedLabel}"
+                       HorizontalOptions="Center"
+                       VerticalOptions="Center" />
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate>
+                    <Border Style="{StaticResource CardBorder}">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <VerticalStackLayout Spacing="3">
+                                <Label Text="{Binding DeviceDisplay}" FontSize="18" FontAttributes="Bold" />
+                                <Label Text="{Binding UserDisplay}" Style="{StaticResource MutedLabel}" />
+                                <Label Text="{Binding MediaDisplay}" Style="{StaticResource MutedLabel}" />
+                            </VerticalStackLayout>
+                            <Label Grid.Column="1"
+                                   Text="SELECT"
+                                   TextColor="{StaticResource EavAccent}"
+                                   FontAttributes="Bold"
+                                   VerticalTextAlignment="Center" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <Border Grid.Row="4" Style="{StaticResource CardBorder}">
+            <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10" RowSpacing="8">
+                <Label x:Name="StatusLabel"
+                       Text="Not syncing"
+                       VerticalTextAlignment="Center" />
+                <Button x:Name="StartButton"
+                        Grid.Column="1"
+                        Text="Start Together"
+                        Clicked="StartClicked" />
+                <Button x:Name="StopButton"
+                        Grid.Column="2"
+                        Text="Stop Sync"
+                        Clicked="StopClicked"
+                        IsEnabled="False" />
+                <Label Grid.Row="1"
+                       Grid.ColumnSpan="3"
+                       Text="Sync'EM up mirrors pause/unpause and seek changes from the host and corrects noticeable playback drift."
+                       Style="{StaticResource MutedLabel}" />
+            </Grid>
+        </Border>
+    </Grid>
+</ContentPage>
