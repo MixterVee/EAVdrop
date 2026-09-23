@@ -15,10 +15,10 @@
                     <Label Text="Connection" FontSize="20" FontAttributes="Bold" />
 
                     <Label Text="Local Emby URL" FontAttributes="Bold" />
-                    <Entry x:Name="LocalUrlEntry" Placeholder="http://192.168.1.188:19096" Keyboard="Url" />
+                    <Entry x:Name="LocalUrlEntry" Placeholder="http://192.168.XXX.XXX:XXXX" Keyboard="Url" />
 
                     <Label Text="Remote HTTPS URL" FontAttributes="Bold" />
-                    <Entry x:Name="RemoteUrlEntry" Placeholder="https://emby.example.com" Keyboard="Url" />
+                    <Entry x:Name="RemoteUrlEntry" Placeholder="https://your-emby-server.example.com" Keyboard="Url" />
 
                     <Label Text="Connection mode" FontAttributes="Bold" />
                     <Picker x:Name="ModePicker" />
