@@ -59,20 +59,7 @@ public class MainActivity : MauiAppCompatActivity
             new AlertDialog.Builder(this)
                 .SetTitle("EAVdrop Android error")
                 .SetMessage(details)
-                .SetPositiveButton("Copy", (_, _) =>
-                {
-                    try
-                    {
-                        var clipboard = (ClipboardManager?)GetSystemService(ClipboardService);
-                        clipboard?.SetPrimaryClip(ClipData.NewPlainText("EAVdrop error", details));
-                    }
-                    catch
-                    {
-                    }
-
-                    _showingFatalError = false;
-                })
-                .SetNegativeButton("Close", (_, _) => FinishAndRemoveTask())
+                .SetPositiveButton("Close", (_, _) => FinishAndRemoveTask())
                 .SetCancelable(false)
                 .Show();
         }
