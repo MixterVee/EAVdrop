@@ -11,6 +11,9 @@ public partial class ActivityPage : ContentPage
     private List<PlaybackHistoryItem> _all = [];
     private List<UserFilterItem> _users = [];
     private bool _loading;
+    private bool _hasLoaded;
+    private bool _suppressFilterChanged;
+    private string _loadedContextKey = "";
 
     public ActivityPage()
     {
@@ -22,17 +25,37 @@ public partial class ActivityPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await LoadAsync();
+        await LoadAsync(force: false);
     }
 
-    private async void RefreshClicked(object sender, EventArgs e) => await LoadAsync();
-    private void FilterChanged(object sender, EventArgs e) => ApplyFilter();
+    private async void RefreshClicked(object sender, EventArgs e) => await LoadAsync(force: true);
+
+    private void FilterChanged(object sender, EventArgs e)
+    {
+        if (!_suppressFilterChanged)
+            ApplyFilter();
+    }
+
     private void SearchChanged(object sender, TextChangedEventArgs e) => ApplyFilter();
 
-    private async Task LoadAsync()
+    private async Task LoadAsync(bool force)
     {
         if (_loading) return;
+
+        var contextKey = GetContextKey();
+
+        // Shell keeps this page alive between tab changes. If the server/account/history
+        // settings are unchanged, keep the existing list instead of reloading and rebinding it.
+        if (!force && _hasLoaded && string.Equals(_loadedContextKey, contextKey, StringComparison.Ordinal))
+        {
+            RangeCaptionLabel.Text = $"Playback history — {_settings.HistoryRangeCaption}";
+            return;
+        }
+
         _loading = true;
+        var canKeepExistingOnFailure =
+            _hasLoaded && string.Equals(_loadedContextKey, contextKey, StringComparison.Ordinal);
+
         RangeCaptionLabel.Text = $"Playback history — {_settings.HistoryRangeCaption}";
         StatusLabel.Text = "Loading playback history…";
 
@@ -67,14 +90,30 @@ public partial class ActivityPage : ContentPage
 
             var previousUserId = (UserPicker.SelectedItem as UserFilterItem)?.Id ?? "";
             _users = [new UserFilterItem("", "All users"), .. users.Select(u => new UserFilterItem(u.Id, u.Name))];
-            UserPicker.ItemsSource = _users;
-            UserPicker.ItemDisplayBinding = new Binding(nameof(UserFilterItem.Name));
-            UserPicker.SelectedItem = _users.FirstOrDefault(u => string.Equals(u.Id, previousUserId, StringComparison.OrdinalIgnoreCase)) ?? _users[0];
+
+            _suppressFilterChanged = true;
+            try
+            {
+                UserPicker.ItemsSource = _users;
+                UserPicker.ItemDisplayBinding = new Binding(nameof(UserFilterItem.Name));
+                UserPicker.SelectedItem =
+                    _users.FirstOrDefault(u => string.Equals(u.Id, previousUserId, StringComparison.OrdinalIgnoreCase))
+                    ?? _users[0];
+            }
+            finally
+            {
+                _suppressFilterChanged = false;
+            }
+
+            _loadedContextKey = contextKey;
+            _hasLoaded = true;
             ApplyFilter();
         }
         catch (Exception ex)
         {
-            ActivityView.ItemsSource = null;
+            if (!canKeepExistingOnFailure)
+                ActivityView.ItemsSource = null;
+
             StatusLabel.Text = ex.Message;
         }
         finally
@@ -82,6 +121,14 @@ public partial class ActivityPage : ContentPage
             _loading = false;
         }
     }
+
+    private string GetContextKey() =>
+        string.Join("|",
+            _settings.AuthenticatedUserId,
+            _settings.Mode,
+            _settings.LocalUrl,
+            _settings.RemoteUrl,
+            _settings.HistoryRange);
 
     private void ApplyFilter()
     {
