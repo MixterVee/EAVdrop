@@ -62,13 +62,18 @@ public partial class SettingsPage : ContentPage
             PasswordEntry.Text = "";
             UsernameEntry.Text = result.User?.Name ?? UsernameEntry.Text;
             AccountStatusLabel.Text = $"Signed in successfully using {_api.LastConnectedBaseUrl}";
+            StatusLabel.Text = "Emby sign-in successful.";
             await RefreshSignedInStatusAsync();
+            await DisplayAlert("Emby sign-in", $"Signed in as {UsernameEntry.Text}.", "OK");
         }
         catch (Exception ex)
         {
-            PasswordEntry.Text = "";
-            AccountStatusLabel.Text = ex.Message;
+            // Keep the password in place on failure so the user can correct a typo
+            // without having to re-enter the whole value.
+            AccountStatusLabel.Text = $"Sign-in failed: {ex.Message}";
+            StatusLabel.Text = AccountStatusLabel.Text;
             await RefreshSignedInStatusAsync();
+            await DisplayAlert("Emby sign-in failed", ex.Message, "OK");
         }
         finally
         {
