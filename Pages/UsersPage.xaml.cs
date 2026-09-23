@@ -9,6 +9,8 @@ public partial class UsersPage : ContentPage
     private readonly EmbyApiClient _api;
     private readonly SettingsService _settings;
     private bool _loading;
+    private bool _hasLoaded;
+    private string _loadedContextKey = "";
 
     public UsersPage()
     {
@@ -20,15 +22,29 @@ public partial class UsersPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await LoadAsync();
+        await LoadAsync(force: false);
     }
 
-    private async void RefreshClicked(object sender, EventArgs e) => await LoadAsync();
+    private async void RefreshClicked(object sender, EventArgs e) => await LoadAsync(force: true);
 
-    private async Task LoadAsync()
+    private async Task LoadAsync(bool force)
     {
         if (_loading) return;
+
+        var contextKey = GetContextKey();
+
+        // Shell keeps this page alive between tab switches. If nothing relevant
+        // changed, leave the existing cards alone instead of rebuilding the list.
+        if (!force && _hasLoaded && string.Equals(_loadedContextKey, contextKey, StringComparison.Ordinal))
+        {
+            RangeCaptionLabel.Text = $"Recent playback — {_settings.HistoryRangeCaption}";
+            return;
+        }
+
         _loading = true;
+        var keepExistingOnFailure =
+            _hasLoaded && string.Equals(_loadedContextKey, contextKey, StringComparison.Ordinal);
+
         RangeCaptionLabel.Text = $"Recent playback — {_settings.HistoryRangeCaption}";
         StatusLabel.Text = "Loading users and playback history…";
 
@@ -87,10 +103,14 @@ public partial class UsersPage : ContentPage
 
             UsersView.ItemsSource = summaries;
             StatusLabel.Text = summaries.Count == 1 ? "1 Emby user" : $"{summaries.Count} Emby users";
+            _loadedContextKey = contextKey;
+            _hasLoaded = true;
         }
         catch (Exception ex)
         {
-            UsersView.ItemsSource = null;
+            if (!keepExistingOnFailure)
+                UsersView.ItemsSource = null;
+
             StatusLabel.Text = ex.Message;
         }
         finally
@@ -98,6 +118,14 @@ public partial class UsersPage : ContentPage
             _loading = false;
         }
     }
+
+    private string GetContextKey() =>
+        string.Join("|",
+            _settings.AuthenticatedUserId,
+            _settings.Mode,
+            _settings.LocalUrl,
+            _settings.RemoteUrl,
+            _settings.HistoryRange);
 
     private async void UserSelected(object sender, SelectionChangedEventArgs e)
     {
