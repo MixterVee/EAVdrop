@@ -15,6 +15,10 @@ public sealed class SessionInfoDto
     public bool SupportsRemoteControl { get; set; }
     public List<string> SupportedCommands { get; set; } = [];
 
+    // Filled by Sync'EM up after comparing the full session list with
+    // /Sessions?ControllableByUserId=...
+    public bool IsControllableForSignedInUser { get; set; }
+
     public string UserDisplay => string.IsNullOrWhiteSpace(UserName) ? "Unknown user" : UserName;
     public string DeviceDisplay => string.Join(" • ", new[] { DeviceName, Client }.Where(x => !string.IsNullOrWhiteSpace(x)));
     public string MediaDisplay => NowPlayingItem?.DisplayName ?? "Idle";
@@ -66,7 +70,15 @@ public sealed class SessionInfoDto
 
     public string EndpointDisplay => string.IsNullOrWhiteSpace(RemoteEndPoint) ? "" : $"Connection • {RemoteEndPoint}";
     public string SyncDisplay => $"{UserDisplay} • {DeviceDisplay}" + (IsPlaying ? $" • {MediaDisplay}" : " • Idle");
-    public bool IsSyncControllable => !string.IsNullOrWhiteSpace(Id) && SupportsRemoteControl;
+    public bool IsSyncControllable => !string.IsNullOrWhiteSpace(Id) && (IsControllableForSignedInUser || SupportsRemoteControl);
+    public string SyncControlStatus => IsControllableForSignedInUser
+        ? "Remote control ready"
+        : SupportsRemoteControl
+            ? "Client reports remote-control support"
+            : "Remote control unverified — Sync'EM up will try";
+    public string LastActivityDisplay => LastActivityDate.HasValue
+        ? $"Last active {LastActivityDate.Value.LocalDateTime:g}"
+        : "";
 
     private static void AddUnique(List<string> badges, string? value)
     {
