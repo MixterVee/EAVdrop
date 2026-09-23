@@ -22,7 +22,10 @@ public sealed class SettingsService
     private const string ConnectionModeKey = "connection_mode";
     private const string PlaybackHistoryRangeKey = "playback_history_range";
     private const string DeviceIdKey = "device_id";
-    private const string ApiKeyKey = "emby_api_key";
+    private const string AccessTokenKey = "emby_access_token";
+    private const string LegacyApiKeyKey = "emby_api_key";
+    private const string AuthenticatedUserIdKey = "authenticated_user_id";
+    private const string AuthenticatedUserNameKey = "authenticated_user_name";
 
     public string LocalUrl
     {
@@ -100,11 +103,14 @@ public sealed class SettingsService
         }
     }
 
-    public async Task<string> GetApiKeyAsync()
+    public string AuthenticatedUserId => Preferences.Default.Get(AuthenticatedUserIdKey, "");
+    public string AuthenticatedUserName => Preferences.Default.Get(AuthenticatedUserNameKey, "");
+
+    public async Task<string> GetAccessTokenAsync()
     {
         try
         {
-            return await SecureStorage.Default.GetAsync(ApiKeyKey) ?? "";
+            return await SecureStorage.Default.GetAsync(AccessTokenKey) ?? "";
         }
         catch
         {
@@ -112,19 +118,28 @@ public sealed class SettingsService
         }
     }
 
-    public async Task SaveApiKeyAsync(string value)
+    public async Task SaveAuthenticationAsync(string accessToken, string userId, string userName)
     {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            SecureStorage.Default.Remove(ApiKeyKey);
-            return;
-        }
-
-        await SecureStorage.Default.SetAsync(ApiKeyKey, value.Trim());
+        await SecureStorage.Default.SetAsync(AccessTokenKey, accessToken);
+        Preferences.Default.Set(AuthenticatedUserIdKey, userId);
+        Preferences.Default.Set(AuthenticatedUserNameKey, userName);
+        SecureStorage.Default.Remove(LegacyApiKeyKey);
     }
 
+    public Task ClearAuthenticationAsync()
+    {
+        SecureStorage.Default.Remove(AccessTokenKey);
+        SecureStorage.Default.Remove(LegacyApiKeyKey);
+        Preferences.Default.Remove(AuthenticatedUserIdKey);
+        Preferences.Default.Remove(AuthenticatedUserNameKey);
+        return Task.CompletedTask;
+    }
+
+    public async Task<bool> IsSignedInAsync() =>
+        !string.IsNullOrWhiteSpace(await GetAccessTokenAsync());
+
     public async Task<bool> HasMinimumConfigurationAsync() =>
-        !string.IsNullOrWhiteSpace(LocalUrl) && !string.IsNullOrWhiteSpace(await GetApiKeyAsync());
+        GetCandidateUrls().Any() && await IsSignedInAsync();
 
     public IEnumerable<string> GetCandidateUrls()
     {

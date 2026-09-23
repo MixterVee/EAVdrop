@@ -7,6 +7,8 @@ namespace EAVdrop.Services;
 
 public sealed class EmbyApiClient
 {
+    private const string AppVersion = "0.3.0";
+
     private readonly SettingsService _settings;
     private readonly HttpClient _http = new();
     private readonly SemaphoreSlim _historyGate = new(3, 3);
@@ -21,6 +23,109 @@ public sealed class EmbyApiClient
     {
         _settings = settings;
         _http.Timeout = Timeout.InfiniteTimeSpan;
+    }
+
+    public async Task<AuthenticationResultDto> AuthenticateAsync(string username, string password, CancellationToken ct = default)
+    {
+        username = username.Trim();
+        if (string.IsNullOrWhiteSpace(username))
+            throw new InvalidOperationException("Enter your Emby username.");
+
+        Exception? lastError = null;
+
+        foreach (var baseUrl in _settings.GetCandidateUrls())
+        {
+            try
+            {
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                timeout.CancelAfter(TimeSpan.FromSeconds(30));
+
+                var requestUri = BuildUri(baseUrl, "Users/AuthenticateByName");
+                using var request = new HttpRequestMessage(HttpMethod.Post, requestUri);
+                request.Headers.TryAddWithoutValidation("X-Emby-Authorization", BuildAuthorizationHeader());
+                request.Content = JsonContent.Create(new
+                {
+                    Username = username,
+                    Pw = password
+                });
+
+                using var response = await _http.SendAsync(request, timeout.Token);
+
+                if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                {
+                    lastError = new UnauthorizedAccessException("Invalid Emby username or password.");
+                    continue;
+                }
+
+                response.EnsureSuccessStatusCode();
+
+                var result = await response.Content.ReadFromJsonAsync<AuthenticationResultDto>(_json, timeout.Token);
+                if (result is null || string.IsNullOrWhiteSpace(result.AccessToken) || result.User is null)
+                    throw new InvalidOperationException("Emby returned an incomplete sign-in response.");
+
+                if (result.User.Policy?.IsAdministrator != true)
+                    throw new UnauthorizedAccessException("EAVdrop needs an Emby administrator account to view server-wide users and playback activity.");
+
+                await _settings.SaveAuthenticationAsync(result.AccessToken, result.User.Id, result.User.Name);
+                LastConnectedBaseUrl = baseUrl;
+                return result;
+            }
+            catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
+            {
+                lastError = new TimeoutException("The Emby sign-in request timed out after 30 seconds.", ex);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                lastError = ex;
+            }
+            catch (Exception ex)
+            {
+                lastError = ex;
+            }
+        }
+
+        if (lastError is not null)
+            throw new InvalidOperationException($"Unable to sign in to Emby. {lastError.Message}", lastError);
+
+        throw new InvalidOperationException("No Emby server URL is configured.");
+    }
+
+    public async Task LogoutAsync(CancellationToken ct = default)
+    {
+        var token = await _settings.GetAccessTokenAsync();
+
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                foreach (var baseUrl in _settings.GetCandidateUrls())
+                {
+                    try
+                    {
+                        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                        timeout.CancelAfter(TimeSpan.FromSeconds(10));
+
+                        using var request = new HttpRequestMessage(HttpMethod.Post, BuildUri(baseUrl, "Sessions/Logout"));
+                        request.Headers.TryAddWithoutValidation("X-Emby-Token", token);
+                        request.Headers.TryAddWithoutValidation(
+                            "X-Emby-Authorization",
+                            BuildAuthorizationHeader(_settings.AuthenticatedUserId));
+
+                        using var response = await _http.SendAsync(request, timeout.Token);
+                        if (response.IsSuccessStatusCode)
+                            break;
+                    }
+                    catch
+                    {
+                        // Local sign-out still happens below even if the server is unavailable.
+                    }
+                }
+            }
+        }
+        finally
+        {
+            await _settings.ClearAuthenticationAsync();
+        }
     }
 
     public Task<SystemInfoDto> GetSystemInfoAsync(CancellationToken ct = default) =>
@@ -84,11 +189,12 @@ public sealed class EmbyApiClient
 
     private async Task<T> GetAsync<T>(string relativePath, CancellationToken ct)
     {
-        var token = await _settings.GetApiKeyAsync();
+        var token = await _settings.GetAccessTokenAsync();
         if (string.IsNullOrWhiteSpace(token))
-            throw new InvalidOperationException("No Emby API key is saved. Open Settings first.");
+            throw new InvalidOperationException("You are not signed in to Emby. Open Settings and sign in first.");
 
         Exception? lastError = null;
+        var authenticationRejected = false;
 
         foreach (var baseUrl in _settings.GetCandidateUrls())
         {
@@ -102,12 +208,16 @@ public sealed class EmbyApiClient
                 request.Headers.TryAddWithoutValidation("X-Emby-Token", token);
                 request.Headers.TryAddWithoutValidation(
                     "X-Emby-Authorization",
-                    $"MediaBrowser Client=\"EAVdrop\", Device=\"{DeviceInfo.Current.Platform}\", DeviceId=\"{_settings.DeviceId}\", Version=\"0.1.5\"");
+                    BuildAuthorizationHeader(_settings.AuthenticatedUserId));
 
                 using var response = await _http.SendAsync(request, timeout.Token);
 
                 if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-                    throw new UnauthorizedAccessException("Emby rejected the API key or the key does not have administrator access.");
+                {
+                    authenticationRejected = true;
+                    lastError = new UnauthorizedAccessException("The saved Emby sign-in was rejected.");
+                    continue;
+                }
 
                 response.EnsureSuccessStatusCode();
                 var result = await response.Content.ReadFromJsonAsync<T>(_json, timeout.Token);
@@ -127,10 +237,22 @@ public sealed class EmbyApiClient
             }
         }
 
+        if (authenticationRejected && lastError is UnauthorizedAccessException)
+        {
+            await _settings.ClearAuthenticationAsync();
+            throw new UnauthorizedAccessException("Your Emby sign-in has expired or was revoked. Open Settings and sign in again.");
+        }
+
         if (lastError is not null)
             throw new InvalidOperationException($"Unable to connect to Emby. {lastError.Message}", lastError);
 
         throw new InvalidOperationException("No Emby server URL is configured.");
+    }
+
+    private string BuildAuthorizationHeader(string? userId = null)
+    {
+        var userPart = string.IsNullOrWhiteSpace(userId) ? "" : $"UserId=\"{userId}\", ";
+        return $"MediaBrowser {userPart}Client=\"EAVdrop\", Device=\"{DeviceInfo.Current.Platform}\", DeviceId=\"{_settings.DeviceId}\", Version=\"{AppVersion}\"";
     }
 
     private static Uri BuildUri(string baseUrl, string relativePath)

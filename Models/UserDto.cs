@@ -1,5 +1,12 @@
 namespace EAVdrop.Models;
 
+public sealed class AuthenticationResultDto
+{
+    public UserDto? User { get; set; }
+    public SessionInfoDto? SessionInfo { get; set; }
+    public string AccessToken { get; set; } = "";
+}
+
 public sealed class UserQueryResultDto
 {
     public List<UserDto> Items { get; set; } = [];

@@ -8,7 +8,7 @@
     <ScrollView>
         <VerticalStackLayout Padding="18" Spacing="14" MaximumWidthRequest="760" HorizontalOptions="Fill">
             <Label Text="Settings" FontSize="28" FontAttributes="Bold" />
-            <Label Text="Your API key stays on this device in secure storage. EAVdrop never needs your Emby password." Style="{StaticResource MutedLabel}" />
+            <Label Text="Sign in with an Emby administrator account. Your password is used only during sign-in and is never saved." Style="{StaticResource MutedLabel}" />
 
             <Border Style="{StaticResource CardBorder}">
                 <VerticalStackLayout Spacing="10">
@@ -22,9 +22,27 @@
 
                     <Label Text="Connection mode" FontAttributes="Bold" />
                     <Picker x:Name="ModePicker" />
+                </VerticalStackLayout>
+            </Border>
 
-                    <Label Text="EAVdrop API key" FontAttributes="Bold" />
-                    <Entry x:Name="ApiKeyEntry" IsPassword="True" Placeholder="Paste the API key here" />
+            <Border Style="{StaticResource CardBorder}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Emby account" FontSize="20" FontAttributes="Bold" />
+                    <Label x:Name="SignedInLabel" Text="Not signed in" Style="{StaticResource MutedLabel}" />
+
+                    <Label Text="Username" FontAttributes="Bold" />
+                    <Entry x:Name="UsernameEntry" Placeholder="Emby username" ReturnType="Next" />
+
+                    <Label Text="Password" FontAttributes="Bold" />
+                    <Entry x:Name="PasswordEntry" IsPassword="True" Placeholder="Emby password" ReturnType="Done" Completed="PasswordCompleted" />
+
+                    <HorizontalStackLayout Spacing="10">
+                        <Button Text="Sign In" Clicked="SignInClicked" />
+                        <Button Text="Sign Out" Clicked="SignOutClicked" />
+                    </HorizontalStackLayout>
+
+                    <Label Text="For remote sign-in, use HTTPS. EAVdrop stores the returned Emby access token securely, not your password." Style="{StaticResource MutedLabel}" />
+                    <Label x:Name="AccountStatusLabel" Style="{StaticResource MutedLabel}" />
                 </VerticalStackLayout>
             </Border>
 
@@ -38,7 +56,7 @@
             </Border>
 
             <HorizontalStackLayout Spacing="10">
-                <Button Text="Save" Clicked="SaveClicked" />
+                <Button Text="Save Settings" Clicked="SaveClicked" />
                 <Button Text="Test Connection" Clicked="TestClicked" />
             </HorizontalStackLayout>
 
