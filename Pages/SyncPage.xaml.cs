@@ -9,7 +9,7 @@ public partial class SyncPage : ContentPage
     private readonly EmbyApiClient _api;
     private readonly SyncCoordinatorService _sync;
     private List<SessionInfoDto> _allSessions = [];
-    private List<SessionInfoDto> _controllableSessions = [];
+    private HashSet<string> _controllableSessionIds = new(StringComparer.OrdinalIgnoreCase);
     private bool _loading;
 
     public SyncPage()
@@ -101,11 +101,15 @@ public partial class SyncPage : ContentPage
                 .ThenBy(s => s.UserName)
                 .ToList();
 
-            _controllableSessions = (await controllableSessionsTask)
+            _controllableSessionIds = (await controllableSessionsTask)
                 .Where(s => !string.IsNullOrWhiteSpace(s.Id))
-                .OrderBy(s => s.DeviceName)
-                .ThenBy(s => s.UserName)
-                .ToList();
+                .Select(s => s.Id!)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var session in _allSessions)
+                session.IsControllableForSignedInUser =
+                    !string.IsNullOrWhiteSpace(session.Id) &&
+                    _controllableSessionIds.Contains(session.Id);
 
             // The host only needs to expose playback state. It does not need to be
             // remotely controllable because Sync'EM up never sends commands to it.
@@ -124,11 +128,16 @@ public partial class SyncPage : ContentPage
 
             if (!_sync.IsRunning)
             {
+                var hostId = (HostPicker.SelectedItem as SessionInfoDto)?.Id;
+                var participants = _allSessions
+                    .Where(s => !string.IsNullOrWhiteSpace(s.Id))
+                    .Where(s => !string.Equals(s.Id, hostId, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                var reportedControllable = participants.Count(s => s.IsControllableForSignedInUser || s.SupportsRemoteControl);
+
                 StatusLabel.Text = hosts.Count == 0
-                    ? "No Emby session is currently playing."
-                    : _controllableSessions.Count == 0
-                        ? $"Found {hosts.Count} playing host{(hosts.Count == 1 ? "" : "s")}, but no remotely controllable participant devices."
-                        : $"Ready to Sync'EM up • {hosts.Count} host{(hosts.Count == 1 ? "" : "s")} • {_controllableSessions.Count} controllable device{(_controllableSessions.Count == 1 ? "" : "s")}.";
+                    ? $"No Emby session is currently playing • server sees {_allSessions.Count} session{(_allSessions.Count == 1 ? "" : "s")}."
+                    : $"Ready to Sync'EM up • {participants.Count} other session{(participants.Count == 1 ? "" : "s")} seen • {reportedControllable} reported controllable.";
             }
         }
         catch (Exception ex)
@@ -148,8 +157,12 @@ public partial class SyncPage : ContentPage
     {
         var hostId = (HostPicker.SelectedItem as SessionInfoDto)?.Id;
         ParticipantsView.SelectedItems.Clear();
-        ParticipantsView.ItemsSource = _controllableSessions
+        ParticipantsView.ItemsSource = _allSessions
+            .Where(s => !string.IsNullOrWhiteSpace(s.Id))
             .Where(s => !string.Equals(s.Id, hostId, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(s => s.IsControllableForSignedInUser || s.SupportsRemoteControl)
+            .ThenByDescending(s => s.LastActivityDate)
+            .ThenBy(s => s.DeviceName)
             .ToList();
     }
 
