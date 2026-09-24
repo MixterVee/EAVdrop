@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using EAVdrop.Models;
 
 namespace EAVdrop.Services;
@@ -8,10 +9,16 @@ public sealed class SyncCoordinatorService
     private static readonly TimeSpan PausedSyncInterval = TimeSpan.FromMilliseconds(750);
     private static readonly TimeSpan CorrectionCooldown = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan CommandSettleDelay = TimeSpan.FromMilliseconds(350);
+    private static readonly TimeSpan FineAlignmentSettleDelay = TimeSpan.FromSeconds(4);
+    private static readonly TimeSpan FineAlignmentRetryDelay = TimeSpan.FromSeconds(4);
 
     // Normal clients can naturally differ by a second or two because of buffering,
     // decoding and reporting latency. Do not chase that harmless difference.
     private const long PlayingDriftToleranceTicks = TimeSpan.TicksPerSecond * 4;
+    private const long FineAlignmentToleranceTicks = TimeSpan.TicksPerMillisecond * 450;
+    private const long FineAlignmentMinLeadTicks = TimeSpan.TicksPerMillisecond * 250;
+    private const long FineAlignmentMaxLeadTicks = TimeSpan.TicksPerMillisecond * 1250;
+    private const int FineAlignmentMaxAttempts = 2;
     private const long PausedDriftToleranceTicks = TimeSpan.TicksPerSecond * 1;
     private const long HostSeekDetectionTicks = TimeSpan.TicksPerSecond * 6;
 
@@ -19,7 +26,9 @@ public sealed class SyncCoordinatorService
     private CancellationTokenSource? _syncCts;
     private string _hostSessionId = "";
     private HashSet<string> _participantSessionIds = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, DateTimeOffset> _lastCorrectionAt = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, DateTimeOffset> _lastCorrectionAt = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, DateTimeOffset> _fineAlignAfter = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, int> _fineAlignAttempts = new(StringComparer.OrdinalIgnoreCase);
 
     private string? _lastHostItemId;
     private long? _lastHostPositionTicks;
@@ -231,6 +240,7 @@ public sealed class SyncCoordinatorService
         {
             await _api.PlayOnSessionAsync(participantId, hostItemId, hostPosition, ct);
             MarkCorrected(participantId);
+            ScheduleFineAlignment(participantId, FineAlignmentSettleDelay, resetAttempts: true);
 
             if (hostPaused)
             {
@@ -296,10 +306,17 @@ public sealed class SyncCoordinatorService
             }
 
             await _api.SendPlayStateCommandAsync(participantId, "Unpause", null, ct);
+            ScheduleFineAlignment(participantId, FineAlignmentSettleDelay, resetAttempts: true);
             return;
         }
 
         if (participant.PlayState?.CanSeek == false)
+            return;
+
+        // After initial launch/resume/seek, do a short fine-alignment phase.
+        // This closes the ~1 second startup gap without constantly seeking during
+        // steady playback.
+        if (await TryFineAlignAsync(participantId, hostPosition, participantPosition, ct))
             return;
 
         // A real host seek is intentional and should be mirrored immediately.
@@ -307,6 +324,7 @@ public sealed class SyncCoordinatorService
         {
             await _api.SendPlayStateCommandAsync(participantId, "Seek", hostPosition, ct);
             MarkCorrected(participantId);
+            ScheduleFineAlignment(participantId, FineAlignmentSettleDelay, resetAttempts: true);
             return;
         }
 
@@ -317,6 +335,66 @@ public sealed class SyncCoordinatorService
             await _api.SendPlayStateCommandAsync(participantId, "Seek", hostPosition, ct);
             MarkCorrected(participantId);
         }
+    }
+
+    private async Task<bool> TryFineAlignAsync(
+        string participantId,
+        long hostPosition,
+        long participantPosition,
+        CancellationToken ct)
+    {
+        if (!_fineAlignAfter.TryGetValue(participantId, out var dueAt))
+            return false;
+
+        if (DateTimeOffset.UtcNow < dueAt)
+            return false;
+
+        var signedDrift = hostPosition - participantPosition;
+        var absoluteDrift = Math.Abs(signedDrift);
+
+        if (absoluteDrift <= FineAlignmentToleranceTicks)
+        {
+            ClearFineAlignment(participantId);
+            return false;
+        }
+
+        var attempts = _fineAlignAttempts.TryGetValue(participantId, out var value) ? value : 0;
+        if (attempts >= FineAlignmentMaxAttempts)
+        {
+            ClearFineAlignment(participantId);
+            return false;
+        }
+
+        // If the participant is behind, aim slightly ahead of the sampled host
+        // position to account for command/client latency. Use the measured gap as
+        // the lead, but cap it so one noisy session sample cannot cause a huge jump.
+        // If the participant is ahead, use a small positive lead so the host does
+        // not run away while the seek command is travelling.
+        var leadTicks = signedDrift > 0
+            ? Math.Clamp(signedDrift, FineAlignmentMinLeadTicks, FineAlignmentMaxLeadTicks)
+            : FineAlignmentMinLeadTicks;
+
+        var target = Math.Max(0, hostPosition + leadTicks);
+        await _api.SendPlayStateCommandAsync(participantId, "Seek", target, ct);
+        MarkCorrected(participantId);
+
+        _fineAlignAttempts[participantId] = attempts + 1;
+        _fineAlignAfter[participantId] = DateTimeOffset.UtcNow + FineAlignmentRetryDelay;
+        return true;
+    }
+
+    private void ScheduleFineAlignment(string participantId, TimeSpan delay, bool resetAttempts)
+    {
+        if (resetAttempts)
+            _fineAlignAttempts[participantId] = 0;
+
+        _fineAlignAfter[participantId] = DateTimeOffset.UtcNow + delay;
+    }
+
+    private void ClearFineAlignment(string participantId)
+    {
+        _fineAlignAfter.TryRemove(participantId, out _);
+        _fineAlignAttempts.TryRemove(participantId, out _);
     }
 
     private bool CorrectionAllowed(string participantId)
@@ -333,6 +411,8 @@ public sealed class SyncCoordinatorService
     private void ResetSyncState()
     {
         _lastCorrectionAt.Clear();
+        _fineAlignAfter.Clear();
+        _fineAlignAttempts.Clear();
         _lastHostItemId = null;
         _lastHostPositionTicks = null;
         _lastHostPaused = null;
