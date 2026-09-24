@@ -313,13 +313,9 @@ public sealed class SyncCoordinatorService
         if (participant.PlayState?.CanSeek == false)
             return;
 
-        // After initial launch/resume/seek, do a short fine-alignment phase.
-        // This closes the ~1 second startup gap without constantly seeking during
-        // steady playback.
-        if (await TryFineAlignAsync(participantId, hostPosition, participantPosition, ct))
-            return;
-
         // A real host seek is intentional and should be mirrored immediately.
+        // Re-arm fine alignment afterward because the remote client may settle a
+        // little behind or ahead once its decoder catches up.
         if (hostSeeked)
         {
             await _api.SendPlayStateCommandAsync(participantId, "Seek", hostPosition, ct);
@@ -327,6 +323,12 @@ public sealed class SyncCoordinatorService
             ScheduleFineAlignment(participantId, FineAlignmentSettleDelay, resetAttempts: true);
             return;
         }
+
+        // After initial launch/resume/seek, do a short fine-alignment phase.
+        // This closes the ~1 second startup gap without constantly seeking during
+        // steady playback.
+        if (await TryFineAlignAsync(participantId, hostPosition, participantPosition, ct))
+            return;
 
         // During ordinary playback tolerate a few seconds of natural client/reporting
         // difference. If correction is needed, do it at most once per cooldown.
