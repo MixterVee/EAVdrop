@@ -4,7 +4,8 @@ namespace EAVdrop.Services;
 
 public sealed class SyncCoordinatorService
 {
-    private static readonly TimeSpan SyncInterval = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan PlayingSyncInterval = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan PausedSyncInterval = TimeSpan.FromMilliseconds(750);
     private static readonly TimeSpan CorrectionCooldown = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan CommandSettleDelay = TimeSpan.FromMilliseconds(350);
 
@@ -99,7 +100,8 @@ public sealed class SyncCoordinatorService
         {
             while (!ct.IsCancellationRequested)
             {
-                await Task.Delay(SyncInterval, ct);
+                var delay = _lastHostPaused == true ? PausedSyncInterval : PlayingSyncInterval;
+                await Task.Delay(delay, ct);
 
                 var sessions = await _api.GetSessionsAsync(ct);
                 var host = sessions.FirstOrDefault(s => string.Equals(s.Id, _hostSessionId, StringComparison.OrdinalIgnoreCase));
@@ -225,7 +227,7 @@ public sealed class SyncCoordinatorService
             hostItemId,
             StringComparison.OrdinalIgnoreCase);
 
-        if (forcePlay || !sameItem)
+        if (forcePlay)
         {
             await _api.PlayOnSessionAsync(participantId, hostItemId, hostPosition, ct);
             MarkCorrected(participantId);
@@ -245,6 +247,12 @@ public sealed class SyncCoordinatorService
             return;
         }
 
+        // After the initial join, never auto-launch media again. Some Emby clients
+        // briefly stop reporting NowPlayingItem during a long pause. Treat that as
+        // a temporary reporting gap instead of sending PlayNow and restarting the item.
+        if (!sameItem)
+            return;
+
         var participantPaused = participant.PlayState?.IsPaused == true;
         var participantPosition = participant.PlayState?.PositionTicks ?? 0;
         var drift = Math.Abs(participantPosition - hostPosition);
@@ -262,8 +270,7 @@ public sealed class SyncCoordinatorService
 
             var needsPausedCorrection =
                 participant.PlayState?.CanSeek != false &&
-                (hostSeeked || drift > PausedDriftToleranceTicks) &&
-                (hostSeeked || CorrectionAllowed(participantId));
+                (hostSeeked || drift > PausedDriftToleranceTicks);
 
             if (needsPausedCorrection)
             {
