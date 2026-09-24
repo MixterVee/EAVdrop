@@ -35,7 +35,6 @@ public partial class SyncPage : ContentPage
         base.OnAppearing();
         var leadIndex = Array.IndexOf(ParticipantLeadOptionsMs, _settings.SyncParticipantLeadMilliseconds);
         ParticipantLeadPicker.SelectedIndex = leadIndex >= 0 ? leadIndex : 5;
-        UpdateLeadCaption();
 
         UpdateSyncButtons();
         StatusLabel.Text = _sync.Status;
@@ -50,17 +49,31 @@ public partial class SyncPage : ContentPage
         if (index < 0 || index >= ParticipantLeadOptionsMs.Length)
             return;
 
-        _settings.SyncParticipantLeadMilliseconds = ParticipantLeadOptionsMs[index];
-        UpdateLeadCaption();
-        _sync.RequestFineAlignment();
+        var ms = ParticipantLeadOptionsMs[index];
+        _settings.SyncParticipantLeadMilliseconds = ms;
+
+        if (_sync.IsRunning)
+            StatusLabel.Text = $"Participant lead set to {ms} ms • tap Re-align Now to apply it immediately.";
     }
 
-    private void UpdateLeadCaption()
+    private async void RealignClicked(object sender, EventArgs e)
     {
-        var ms = _settings.SyncParticipantLeadMilliseconds;
-        LeadCaptionLabel.Text = ms == 0
-            ? "No participant timing lead."
-            : $"Participant playback is cued {ms} ms ahead of the host.";
+        try
+        {
+            RealignButton.IsEnabled = false;
+            StatusLabel.Text = "Re-aligning participant playback…";
+            await _sync.RealignNowAsync();
+            StatusLabel.Text = _sync.Status;
+        }
+        catch (Exception ex)
+        {
+            StatusLabel.Text = ex.Message;
+            await DisplayAlert("Unable to re-align", ex.Message, "OK");
+        }
+        finally
+        {
+            UpdateSyncButtons();
+        }
     }
 
     private void HostChanged(object sender, EventArgs e)
@@ -220,5 +233,6 @@ public partial class SyncPage : ContentPage
     {
         StartButton.IsEnabled = !_sync.IsRunning && !_loading;
         StopButton.IsEnabled = _sync.IsRunning;
+        RealignButton.IsEnabled = _sync.IsRunning && !_loading;
     }
 }

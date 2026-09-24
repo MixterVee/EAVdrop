@@ -9,17 +9,12 @@ public sealed class SyncCoordinatorService
     private static readonly TimeSpan PausedSyncInterval = TimeSpan.FromMilliseconds(750);
     private static readonly TimeSpan CorrectionCooldown = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan CommandSettleDelay = TimeSpan.FromMilliseconds(350);
-    private static readonly TimeSpan FineAlignmentSettleDelay = TimeSpan.FromSeconds(3);
-    private static readonly TimeSpan FineAlignmentRetryDelay = TimeSpan.FromSeconds(3);
 
-    // Normal clients can naturally differ by a second or two because of buffering,
-    // decoding and reporting latency. Do not chase that harmless difference.
-    private const long PlayingDriftToleranceTicks = TimeSpan.TicksPerSecond * 4;
-    private const long FineAlignmentToleranceTicks = TimeSpan.TicksPerMillisecond * 150;
-    // The participant lead is user-adjustable from the Sync'EM up screen.
-    // Paused positions remain exact; the lead is applied only while playing.
-    private const int FineAlignmentMaxAttempts = 3;
-    private const long PausedDriftToleranceTicks = TimeSpan.TicksPerSecond * 1;
+    // Keep normal playback calm. A participant must be more than one second away
+    // from the selected lead target for two consecutive polls before auto-correction.
+    private const long PlayingTargetToleranceTicks = TimeSpan.TicksPerSecond;
+    private const int RequiredConsecutiveDriftSamples = 2;
+    private const long PausedDriftToleranceTicks = TimeSpan.TicksPerSecond;
     private const long HostSeekDetectionTicks = TimeSpan.TicksPerSecond * 6;
 
     private readonly EmbyApiClient _api;
@@ -28,8 +23,7 @@ public sealed class SyncCoordinatorService
     private string _hostSessionId = "";
     private HashSet<string> _participantSessionIds = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, DateTimeOffset> _lastCorrectionAt = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, DateTimeOffset> _fineAlignAfter = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, int> _fineAlignAttempts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, int> _driftSamples = new(StringComparer.OrdinalIgnoreCase);
 
     private string? _lastHostItemId;
     private long? _lastHostPositionTicks;
@@ -50,13 +44,56 @@ public sealed class SyncCoordinatorService
         _settings = settings;
     }
 
-    public void RequestFineAlignment()
+    public async Task RealignNowAsync(CancellationToken ct = default)
     {
         if (!IsRunning)
-            return;
+            throw new InvalidOperationException("Start Sync'EM up first.");
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(20));
+
+        var sessions = await _api.GetSessionsAsync(timeout.Token);
+        var host = sessions.FirstOrDefault(s =>
+            string.Equals(s.Id, _hostSessionId, StringComparison.OrdinalIgnoreCase));
+
+        if (host?.NowPlayingItem?.Id is not { Length: > 0 } itemId)
+            throw new InvalidOperationException("The host is no longer reporting active playback.");
+
+        var hostPosition = host.PlayState?.PositionTicks ?? 0;
+        var hostPaused = host.PlayState?.IsPaused == true;
+        var corrected = 0;
 
         foreach (var participantId in _participantSessionIds)
-            ScheduleFineAlignment(participantId, TimeSpan.Zero, resetAttempts: true);
+        {
+            var participant = sessions.FirstOrDefault(s =>
+                string.Equals(s.Id, participantId, StringComparison.OrdinalIgnoreCase));
+
+            if (participant is null ||
+                participant.PlayState?.CanSeek == false ||
+                !string.Equals(participant.NowPlayingItem?.Id, itemId, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var target = hostPaused
+                ? hostPosition
+                : Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
+
+            await _api.SendPlayStateCommandAsync(participantId, "Seek", target, timeout.Token);
+
+            if (hostPaused)
+            {
+                await Task.Delay(CommandSettleDelay, timeout.Token);
+                await _api.SendPlayStateCommandAsync(participantId, "Pause", null, timeout.Token);
+            }
+
+            MarkCorrected(participantId);
+            ResetDrift(participantId);
+            corrected++;
+        }
+
+        if (corrected == 0)
+            throw new InvalidOperationException("No selected participant is currently available for re-alignment.");
+
+        SetStatus($"Re-aligned • {_settings.SyncParticipantLeadMilliseconds} ms participant lead");
     }
 
     public async Task StartAsync(string hostSessionId, IEnumerable<string> participantSessionIds, CancellationToken ct = default)
@@ -257,7 +294,7 @@ public sealed class SyncCoordinatorService
                 : Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
             await _api.PlayOnSessionAsync(participantId, hostItemId, initialPosition, ct);
             MarkCorrected(participantId);
-            ScheduleFineAlignment(participantId, FineAlignmentSettleDelay, resetAttempts: true);
+            ResetDrift(participantId);
 
             if (hostPaused)
             {
@@ -278,11 +315,14 @@ public sealed class SyncCoordinatorService
         // briefly stop reporting NowPlayingItem during a long pause. Treat that as
         // a temporary reporting gap instead of sending PlayNow and restarting the item.
         if (!sameItem)
+        {
+            ResetDrift(participantId);
             return;
+        }
 
         var participantPaused = participant.PlayState?.IsPaused == true;
         var participantPosition = participant.PlayState?.PositionTicks ?? 0;
-        var drift = Math.Abs(participantPosition - hostPosition);
+        var pausedDrift = Math.Abs(participantPosition - hostPosition);
 
         if (hostPaused)
         {
@@ -297,7 +337,7 @@ public sealed class SyncCoordinatorService
 
             var needsPausedCorrection =
                 participant.PlayState?.CanSeek != false &&
-                (hostSeeked || drift > PausedDriftToleranceTicks);
+                (hostSeeked || pausedDrift > PausedDriftToleranceTicks);
 
             if (needsPausedCorrection)
             {
@@ -307,6 +347,7 @@ public sealed class SyncCoordinatorService
                 MarkCorrected(participantId);
             }
 
+            ResetDrift(participantId);
             return;
         }
 
@@ -324,7 +365,7 @@ public sealed class SyncCoordinatorService
             }
 
             await _api.SendPlayStateCommandAsync(participantId, "Unpause", null, ct);
-            ScheduleFineAlignment(participantId, FineAlignmentSettleDelay, resetAttempts: true);
+            ResetDrift(participantId);
             return;
         }
 
@@ -339,78 +380,38 @@ public sealed class SyncCoordinatorService
             var seekTarget = Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
             await _api.SendPlayStateCommandAsync(participantId, "Seek", seekTarget, ct);
             MarkCorrected(participantId);
-            ScheduleFineAlignment(participantId, FineAlignmentSettleDelay, resetAttempts: true);
+            ResetDrift(participantId);
             return;
         }
 
-        // After initial launch/resume/seek, do a short fine-alignment phase.
-        // This closes the ~1 second startup gap without constantly seeking during
-        // steady playback.
-        if (await TryFineAlignAsync(participantId, hostPosition, participantPosition, ct))
-            return;
+        // During steady playback compare against the selected lead target, but do
+        // not react to one noisy Emby position sample. Only correct after two
+        // consecutive out-of-tolerance polls, then respect the correction cooldown.
+        var desiredParticipantPosition = Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
+        var targetError = Math.Abs(participantPosition - desiredParticipantPosition);
 
-        // During ordinary playback tolerate a few seconds of natural client/reporting
-        // difference. If correction is needed, do it at most once per cooldown.
-        if (drift > PlayingDriftToleranceTicks && CorrectionAllowed(participantId))
+        if (targetError > PlayingTargetToleranceTicks)
         {
-            await _api.SendPlayStateCommandAsync(participantId, "Seek", hostPosition, ct);
-            MarkCorrected(participantId);
+            var samples = _driftSamples.AddOrUpdate(
+                participantId,
+                1,
+                static (_, current) => current + 1);
+
+            if (samples >= RequiredConsecutiveDriftSamples && CorrectionAllowed(participantId))
+            {
+                await _api.SendPlayStateCommandAsync(participantId, "Seek", desiredParticipantPosition, ct);
+                MarkCorrected(participantId);
+                ResetDrift(participantId);
+            }
+        }
+        else
+        {
+            ResetDrift(participantId);
         }
     }
 
-    private async Task<bool> TryFineAlignAsync(
-        string participantId,
-        long hostPosition,
-        long participantPosition,
-        CancellationToken ct)
-    {
-        if (!_fineAlignAfter.TryGetValue(participantId, out var dueAt))
-            return false;
-
-        if (DateTimeOffset.UtcNow < dueAt)
-            return false;
-
-        var desiredParticipantPosition = hostPosition + ParticipantPlaybackLeadTicks;
-        var error = desiredParticipantPosition - participantPosition;
-
-        if (Math.Abs(error) <= FineAlignmentToleranceTicks)
-        {
-            ClearFineAlignment(participantId);
-            return false;
-        }
-
-        var attempts = _fineAlignAttempts.TryGetValue(participantId, out var value) ? value : 0;
-        if (attempts >= FineAlignmentMaxAttempts)
-        {
-            ClearFineAlignment(participantId);
-            return false;
-        }
-
-        // Seek directly to the selected lead position. The steady-state
-        // drift tolerance intentionally does not fight this offset; fine alignment
-        // treats it as the target rather than as drift that should be removed.
-        var target = Math.Max(0, desiredParticipantPosition);
-        await _api.SendPlayStateCommandAsync(participantId, "Seek", target, ct);
-        MarkCorrected(participantId);
-
-        _fineAlignAttempts[participantId] = attempts + 1;
-        _fineAlignAfter[participantId] = DateTimeOffset.UtcNow + FineAlignmentRetryDelay;
-        return true;
-    }
-
-    private void ScheduleFineAlignment(string participantId, TimeSpan delay, bool resetAttempts)
-    {
-        if (resetAttempts)
-            _fineAlignAttempts[participantId] = 0;
-
-        _fineAlignAfter[participantId] = DateTimeOffset.UtcNow + delay;
-    }
-
-    private void ClearFineAlignment(string participantId)
-    {
-        _fineAlignAfter.TryRemove(participantId, out _);
-        _fineAlignAttempts.TryRemove(participantId, out _);
-    }
+    private void ResetDrift(string participantId) =>
+        _driftSamples.TryRemove(participantId, out _);
 
     private bool CorrectionAllowed(string participantId)
     {
@@ -426,8 +427,7 @@ public sealed class SyncCoordinatorService
     private void ResetSyncState()
     {
         _lastCorrectionAt.Clear();
-        _fineAlignAfter.Clear();
-        _fineAlignAttempts.Clear();
+        _driftSamples.Clear();
         _lastHostItemId = null;
         _lastHostPositionTicks = null;
         _lastHostPaused = null;

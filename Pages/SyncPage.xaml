@@ -5,7 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     Title="Sync'EM up">
 
-    <Grid Padding="18" RowDefinitions="Auto,Auto,*,Auto" RowSpacing="14">
+    <Grid Padding="18" RowDefinitions="Auto,*,Auto" RowSpacing="12">
         <Grid ColumnDefinitions="*,Auto">
             <VerticalStackLayout Spacing="2">
                 <Label Text="Sync'EM up" FontSize="28" FontAttributes="Bold" />
@@ -17,22 +17,8 @@
                     VerticalOptions="Center" />
         </Grid>
 
-        <Border Grid.Row="1" Style="{StaticResource CardBorder}">
-            <VerticalStackLayout Spacing="10">
-                <Label Text="1. Choose the host" FontSize="19" FontAttributes="Bold" />
-                <Label Text="Start the movie or episode normally on one Emby device, then select that active session here."
-                       Style="{StaticResource MutedLabel}" />
-                <Picker x:Name="HostPicker"
-                        Title="Choose currently playing host"
-                        SelectedIndexChanged="HostChanged" />
-                <Label x:Name="HostMediaLabel"
-                       Text="No host selected"
-                       Style="{StaticResource MutedLabel}" />
-            </VerticalStackLayout>
-        </Border>
-
         <CollectionView x:Name="ParticipantsView"
-                        Grid.Row="2"
+                        Grid.Row="1"
                         SelectionMode="Multiple"
                         VerticalOptions="Fill">
             <CollectionView.ItemsLayout>
@@ -40,13 +26,29 @@
             </CollectionView.ItemsLayout>
 
             <CollectionView.Header>
-                <Border Style="{StaticResource CardBorder}" Margin="0,0,0,10">
-                    <VerticalStackLayout Spacing="6">
-                        <Label Text="2. Choose participant devices" FontSize="19" FontAttributes="Bold" />
-                        <Label Text="Select one or more other Emby sessions. Devices reported as controllable are preferred, but Sync'EM up will also let us test an idle session that Emby still reports."
-                               Style="{StaticResource MutedLabel}" />
-                    </VerticalStackLayout>
-                </Border>
+                <VerticalStackLayout Spacing="10">
+                    <Border Style="{StaticResource CardBorder}">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="1. Choose the host" FontSize="19" FontAttributes="Bold" />
+                            <Label Text="Start the movie or episode normally on one Emby device, then select that active session here."
+                                   Style="{StaticResource MutedLabel}" />
+                            <Picker x:Name="HostPicker"
+                                    Title="Choose currently playing host"
+                                    SelectedIndexChanged="HostChanged" />
+                            <Label x:Name="HostMediaLabel"
+                                   Text="No host selected"
+                                   Style="{StaticResource MutedLabel}" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border Style="{StaticResource CardBorder}">
+                        <VerticalStackLayout Spacing="6">
+                            <Label Text="2. Choose participant devices" FontSize="19" FontAttributes="Bold" />
+                            <Label Text="Select one or more other Emby sessions."
+                                   Style="{StaticResource MutedLabel}" />
+                        </VerticalStackLayout>
+                    </Border>
+                </VerticalStackLayout>
             </CollectionView.Header>
 
             <CollectionView.EmptyView>
@@ -77,29 +79,28 @@
                     </Border>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
-
         </CollectionView>
 
-        <Border Grid.Row="3" Style="{StaticResource CardBorder}">
+        <Border Grid.Row="2" Style="{StaticResource CardBorder}">
             <VerticalStackLayout Spacing="8">
                 <Label x:Name="StatusLabel"
                        Text="Not syncing"
                        LineBreakMode="WordWrap" />
 
-                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                    <Label Text="Participant lead"
-                           FontAttributes="Bold"
-                           VerticalTextAlignment="Center" />
+                <Label Text="Participant lead"
+                       FontAttributes="Bold" />
+
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                     <Picker x:Name="ParticipantLeadPicker"
-                            Grid.Column="1"
                             Title="Timing offset"
                             SelectedIndexChanged="ParticipantLeadChanged"
                             HorizontalOptions="Fill" />
+                    <Button x:Name="RealignButton"
+                            Grid.Column="1"
+                            Text="Re-align Now"
+                            Clicked="RealignClicked"
+                            IsEnabled="False" />
                 </Grid>
-
-                <Label x:Name="LeadCaptionLabel"
-                       Text="Participant playback is cued 500 ms ahead of the host."
-                       Style="{StaticResource MutedLabel}" />
 
                 <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
                     <Button x:Name="StartButton"
@@ -113,9 +114,6 @@
                             IsEnabled="False"
                             HorizontalOptions="Fill" />
                 </Grid>
-
-                <Label Text="The device list scrolls independently, so Start Together and timing adjustment stay visible."
-                       Style="{StaticResource MutedLabel}" />
             </VerticalStackLayout>
         </Border>
     </Grid>
