@@ -16,12 +16,11 @@ public sealed class SyncCoordinatorService
     // decoding and reporting latency. Do not chase that harmless difference.
     private const long PlayingDriftToleranceTicks = TimeSpan.TicksPerSecond * 4;
     private const long FineAlignmentToleranceTicks = TimeSpan.TicksPerMillisecond * 150;
-    // The audio tests show the participant's audible output can trail its reported
-    // media position by roughly 450 ms. During the brief fine-alignment phase,
-    // intentionally run its media clock slightly ahead to compensate for that
-    // decoder/output latency. A small command lead covers request/handling time.
-    private const long FineAlignmentOutputLeadTicks = TimeSpan.TicksPerMillisecond * 400;
-    private const long FineAlignmentCommandLeadTicks = TimeSpan.TicksPerMillisecond * 100;
+    // Real-device testing shows the participant's audible output is consistently
+    // about one second behind the host. While playback is active, intentionally
+    // keep the participant media clock one second ahead. Paused positions still
+    // line up exactly so scrubbing/paused-seek behavior remains predictable.
+    private const long ParticipantPlaybackLeadTicks = TimeSpan.TicksPerSecond;
     private const int FineAlignmentMaxAttempts = 3;
     private const long PausedDriftToleranceTicks = TimeSpan.TicksPerSecond * 1;
     private const long HostSeekDetectionTicks = TimeSpan.TicksPerSecond * 6;
@@ -242,7 +241,10 @@ public sealed class SyncCoordinatorService
 
         if (forcePlay)
         {
-            await _api.PlayOnSessionAsync(participantId, hostItemId, hostPosition, ct);
+            var initialPosition = hostPaused
+                ? hostPosition
+                : Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
+            await _api.PlayOnSessionAsync(participantId, hostItemId, initialPosition, ct);
             MarkCorrected(participantId);
             ScheduleFineAlignment(participantId, FineAlignmentSettleDelay, resetAttempts: true);
 
@@ -297,14 +299,15 @@ public sealed class SyncCoordinatorService
             return;
         }
 
-        // When the host resumes, line the participant up before unpausing so it
-        // doesn't visibly play from an old paused position.
+        // When the host resumes, pre-roll the participant one second ahead before
+        // unpausing. That compensates for the participant's repeatable output delay
+        // without ever delaying or otherwise disturbing the host.
         if (participantPaused)
         {
-            if (participant.PlayState?.CanSeek != false &&
-                (hostSeeked || drift > PlayingDriftToleranceTicks))
+            if (participant.PlayState?.CanSeek != false)
             {
-                await _api.SendPlayStateCommandAsync(participantId, "Seek", hostPosition, ct);
+                var resumeTarget = Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
+                await _api.SendPlayStateCommandAsync(participantId, "Seek", resumeTarget, ct);
                 MarkCorrected(participantId);
                 await Task.Delay(CommandSettleDelay, ct);
             }
@@ -322,7 +325,8 @@ public sealed class SyncCoordinatorService
         // little behind or ahead once its decoder catches up.
         if (hostSeeked)
         {
-            await _api.SendPlayStateCommandAsync(participantId, "Seek", hostPosition, ct);
+            var seekTarget = Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
+            await _api.SendPlayStateCommandAsync(participantId, "Seek", seekTarget, ct);
             MarkCorrected(participantId);
             ScheduleFineAlignment(participantId, FineAlignmentSettleDelay, resetAttempts: true);
             return;
@@ -355,7 +359,7 @@ public sealed class SyncCoordinatorService
         if (DateTimeOffset.UtcNow < dueAt)
             return false;
 
-        var desiredParticipantPosition = hostPosition + FineAlignmentOutputLeadTicks;
+        var desiredParticipantPosition = hostPosition + ParticipantPlaybackLeadTicks;
         var error = desiredParticipantPosition - participantPosition;
 
         if (Math.Abs(error) <= FineAlignmentToleranceTicks)
@@ -371,12 +375,10 @@ public sealed class SyncCoordinatorService
             return false;
         }
 
-        // Seek directly to the desired media-time offset. The participant is kept
-        // a few hundred milliseconds ahead of the host's reported position so the
-        // actual audible output lands closer to the host after decoding/buffering.
-        var target = Math.Max(
-            0,
-            desiredParticipantPosition + FineAlignmentCommandLeadTicks);
+        // Seek directly to the one-second-ahead media position. The steady-state
+        // drift tolerance intentionally does not fight this offset; fine alignment
+        // treats it as the target rather than as drift that should be removed.
+        var target = Math.Max(0, desiredParticipantPosition);
         await _api.SendPlayStateCommandAsync(participantId, "Seek", target, ct);
         MarkCorrected(participantId);
 
