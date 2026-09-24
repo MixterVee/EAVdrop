@@ -9,16 +9,20 @@ public sealed class SyncCoordinatorService
     private static readonly TimeSpan PausedSyncInterval = TimeSpan.FromMilliseconds(750);
     private static readonly TimeSpan CorrectionCooldown = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan CommandSettleDelay = TimeSpan.FromMilliseconds(350);
-    private static readonly TimeSpan FineAlignmentSettleDelay = TimeSpan.FromSeconds(4);
-    private static readonly TimeSpan FineAlignmentRetryDelay = TimeSpan.FromSeconds(4);
+    private static readonly TimeSpan FineAlignmentSettleDelay = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan FineAlignmentRetryDelay = TimeSpan.FromSeconds(3);
 
     // Normal clients can naturally differ by a second or two because of buffering,
     // decoding and reporting latency. Do not chase that harmless difference.
     private const long PlayingDriftToleranceTicks = TimeSpan.TicksPerSecond * 4;
-    private const long FineAlignmentToleranceTicks = TimeSpan.TicksPerMillisecond * 450;
-    private const long FineAlignmentMinLeadTicks = TimeSpan.TicksPerMillisecond * 250;
-    private const long FineAlignmentMaxLeadTicks = TimeSpan.TicksPerMillisecond * 1250;
-    private const int FineAlignmentMaxAttempts = 2;
+    private const long FineAlignmentToleranceTicks = TimeSpan.TicksPerMillisecond * 150;
+    // The audio tests show the participant's audible output can trail its reported
+    // media position by roughly 450 ms. During the brief fine-alignment phase,
+    // intentionally run its media clock slightly ahead to compensate for that
+    // decoder/output latency. A small command lead covers request/handling time.
+    private const long FineAlignmentOutputLeadTicks = TimeSpan.TicksPerMillisecond * 400;
+    private const long FineAlignmentCommandLeadTicks = TimeSpan.TicksPerMillisecond * 100;
+    private const int FineAlignmentMaxAttempts = 3;
     private const long PausedDriftToleranceTicks = TimeSpan.TicksPerSecond * 1;
     private const long HostSeekDetectionTicks = TimeSpan.TicksPerSecond * 6;
 
@@ -351,10 +355,10 @@ public sealed class SyncCoordinatorService
         if (DateTimeOffset.UtcNow < dueAt)
             return false;
 
-        var signedDrift = hostPosition - participantPosition;
-        var absoluteDrift = Math.Abs(signedDrift);
+        var desiredParticipantPosition = hostPosition + FineAlignmentOutputLeadTicks;
+        var error = desiredParticipantPosition - participantPosition;
 
-        if (absoluteDrift <= FineAlignmentToleranceTicks)
+        if (Math.Abs(error) <= FineAlignmentToleranceTicks)
         {
             ClearFineAlignment(participantId);
             return false;
@@ -367,16 +371,12 @@ public sealed class SyncCoordinatorService
             return false;
         }
 
-        // If the participant is behind, aim slightly ahead of the sampled host
-        // position to account for command/client latency. Use the measured gap as
-        // the lead, but cap it so one noisy session sample cannot cause a huge jump.
-        // If the participant is ahead, use a small positive lead so the host does
-        // not run away while the seek command is travelling.
-        var leadTicks = signedDrift > 0
-            ? Math.Clamp(signedDrift, FineAlignmentMinLeadTicks, FineAlignmentMaxLeadTicks)
-            : FineAlignmentMinLeadTicks;
-
-        var target = Math.Max(0, hostPosition + leadTicks);
+        // Seek directly to the desired media-time offset. The participant is kept
+        // a few hundred milliseconds ahead of the host's reported position so the
+        // actual audible output lands closer to the host after decoding/buffering.
+        var target = Math.Max(
+            0,
+            desiredParticipantPosition + FineAlignmentCommandLeadTicks);
         await _api.SendPlayStateCommandAsync(participantId, "Seek", target, ct);
         MarkCorrected(participantId);
 
