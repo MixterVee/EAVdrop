@@ -90,9 +90,9 @@ public sealed class SyncCoordinatorService
                 timeout.Token);
 
             var hostPosition = anchor.Host.PlayState?.PositionTicks ?? 0;
-            var participantTarget = hostWasPaused
-                ? hostPosition
-                : Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
+            // Establish the selected lead while everything is stationary. This
+            // means a later resume only needs Unpause; it must not seek again.
+            var participantTarget = Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
 
             SetStatus($"Precision Re-align • setting {_settings.SyncParticipantLeadMilliseconds} ms lead…");
 
@@ -127,7 +127,7 @@ public sealed class SyncCoordinatorService
                 RememberHostState(finalHost);
 
             SetStatus(hostWasPaused
-                ? $"Precision Re-align complete • paused at anchor • {_settings.SyncParticipantLeadMilliseconds} ms lead applies on resume"
+                ? $"Precision Re-align complete • paused at anchor • {_settings.SyncParticipantLeadMilliseconds} ms lead set"
                 : $"Precision Re-align complete • {_settings.SyncParticipantLeadMilliseconds} ms participant lead");
         }
         catch
@@ -193,9 +193,9 @@ public sealed class SyncCoordinatorService
                 timeout.Token);
 
             var hostPosition = anchor.Host.PlayState?.PositionTicks ?? 0;
-            var participantTarget = hostWasPaused
-                ? hostPosition
-                : Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
+            // Establish the selected lead while everything is stationary. This
+            // means a later resume only needs Unpause; it must not seek again.
+            var participantTarget = Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
 
             foreach (var participantId in participants)
             {
@@ -316,21 +316,33 @@ public sealed class SyncCoordinatorService
                 }
 
                 var hostSeeked = DidHostSeek(host);
+                var hostPaused = host.PlayState?.IsPaused == true;
                 var hostPauseStateChanged =
                     _lastHostPaused.HasValue &&
-                    _lastHostPaused.Value != (host.PlayState?.IsPaused == true);
+                    _lastHostPaused.Value != hostPaused;
+
+                // Timeline seeks and transitions into Pause get the exact same
+                // stable-anchor treatment as the manual Precision Re-align button.
+                // Steady playback remains untouched.
+                if (hostSeeked || (hostPauseStateChanged && hostPaused))
+                {
+                    SetStatus(hostSeeked
+                        ? "Host seek detected • running Precision Re-align…"
+                        : "Host paused • running Precision Re-align…");
+                    await RealignNowAsync(ct);
+                    continue;
+                }
 
                 await MirrorHostEventAsync(
                     host,
                     sessions,
-                    hostSeeked,
                     hostPauseStateChanged,
                     ct);
 
                 RememberHostState(host);
 
-                var stateText = host.PlayState?.IsPaused == true ? "paused" : "steady";
-                SetStatus($"Sync'EM up active • {host.MediaDisplay} • {stateText} • no auto realignment");
+                var stateText = hostPaused ? "paused" : "steady";
+                SetStatus($"Sync'EM up active • {host.MediaDisplay} • {stateText} • precision align on seek/pause");
             }
         }
         catch (OperationCanceledException)
@@ -346,7 +358,6 @@ public sealed class SyncCoordinatorService
     private async Task MirrorHostEventAsync(
         SessionInfoDto host,
         IReadOnlyCollection<SessionInfoDto> sessions,
-        bool hostSeeked,
         bool hostPauseStateChanged,
         CancellationToken ct)
     {
@@ -354,7 +365,6 @@ public sealed class SyncCoordinatorService
         if (string.IsNullOrWhiteSpace(itemId))
             return;
 
-        var hostPosition = host.PlayState?.PositionTicks ?? 0;
         var hostPaused = host.PlayState?.IsPaused == true;
 
         foreach (var participantId in _participantSessionIds)
@@ -373,33 +383,14 @@ public sealed class SyncCoordinatorService
                 if (!participantPaused || hostPauseStateChanged)
                     await _api.SendPlayStateCommandAsync(participantId, "Pause", null, ct);
 
-                if (hostSeeked && participant.PlayState?.CanSeek != false)
-                {
-                    await _api.SendPlayStateCommandAsync(participantId, "Seek", hostPosition, ct);
-                    await Task.Delay(CommandSettleDelay, ct);
-                    await _api.SendPlayStateCommandAsync(participantId, "Pause", null, ct);
-                }
-
                 continue;
             }
 
             if (participantPaused)
             {
-                if (hostPauseStateChanged && participant.PlayState?.CanSeek != false)
-                {
-                    var resumeTarget = Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
-                    await _api.SendPlayStateCommandAsync(participantId, "Seek", resumeTarget, ct);
-                    await Task.Delay(CommandSettleDelay, ct);
-                }
-
+                // Precision alignment already set the participant lead at a stable
+                // paused anchor. Resume without a live seek so we do not disturb it.
                 await _api.SendPlayStateCommandAsync(participantId, "Unpause", null, ct);
-                continue;
-            }
-
-            if (hostSeeked && participant.PlayState?.CanSeek != false)
-            {
-                var seekTarget = Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
-                await _api.SendPlayStateCommandAsync(participantId, "Seek", seekTarget, ct);
             }
         }
     }

@@ -102,7 +102,7 @@
                             IsEnabled="False" />
                 </Grid>
 
-                <Label Text="Precision Re-align briefly pauses all devices, locks a stable host position, applies the selected lead, then resumes them together. Steady playback is left alone."
+                <Label Text="Precision Re-align runs automatically after host seeks and when the host is paused. It locks a stable position and applies the selected lead; steady playback is otherwise left alone."
                        Style="{StaticResource MutedLabel}" />
 
                 <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
