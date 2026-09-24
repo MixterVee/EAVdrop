@@ -97,12 +97,12 @@
                             HorizontalOptions="Fill" />
                     <Button x:Name="RealignButton"
                             Grid.Column="1"
-                            Text="Re-align Now"
+                            Text="Precision Re-align"
                             Clicked="RealignClicked"
                             IsEnabled="False" />
                 </Grid>
 
-                <Label Text="Re-align samples playback twice, avoids moving an already-aligned participant, and ignores rapid repeat taps. Steady playback is left alone."
+                <Label Text="Precision Re-align briefly pauses all devices, locks a stable host position, applies the selected lead, then resumes them together. Steady playback is left alone."
                        Style="{StaticResource MutedLabel}" />
 
                 <Grid ColumnDefinitions="*,*" ColumnSpacing="10">

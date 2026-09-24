@@ -7,22 +7,24 @@ public sealed class SyncCoordinatorService
     private static readonly TimeSpan PlayingSyncInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan PausedSyncInterval = TimeSpan.FromMilliseconds(750);
     private static readonly TimeSpan CommandSettleDelay = TimeSpan.FromMilliseconds(350);
-    private static readonly TimeSpan PositionSampleDelay = TimeSpan.FromMilliseconds(500);
-    private static readonly TimeSpan ManualRealignCooldown = TimeSpan.FromSeconds(2);
-    private const long RealignSkipToleranceTicks = TimeSpan.TicksPerMillisecond * 350;
+    private static readonly TimeSpan AnchorPollDelay = TimeSpan.FromMilliseconds(250);
+    private const long StableAnchorToleranceTicks = TimeSpan.TicksPerMillisecond * 100;
+    private const int StableAnchorMaxPolls = 12;
     private const long HostSeekDetectionTicks = TimeSpan.TicksPerSecond * 6;
 
     private readonly EmbyApiClient _api;
     private readonly SettingsService _settings;
+    private readonly SemaphoreSlim _precisionGate = new(1, 1);
+
     private CancellationTokenSource? _syncCts;
     private string _hostSessionId = "";
     private HashSet<string> _participantSessionIds = new(StringComparer.OrdinalIgnoreCase);
+    private volatile bool _precisionOperationInProgress;
 
     private string? _lastHostItemId;
     private long? _lastHostPositionTicks;
     private bool? _lastHostPaused;
     private DateTimeOffset? _lastHostObservedAt;
-    private DateTimeOffset? _lastManualRealignAt;
 
     public bool IsRunning => _syncCts is not null && !_syncCts.IsCancellationRequested;
     public string Status { get; private set; } = "Not syncing";
@@ -43,126 +45,108 @@ public sealed class SyncCoordinatorService
         if (!IsRunning)
             throw new InvalidOperationException("Start Sync'EM up first.");
 
-        var now = DateTimeOffset.UtcNow;
-        if (_lastManualRealignAt.HasValue &&
-            now - _lastManualRealignAt.Value < ManualRealignCooldown)
+        if (!await _precisionGate.WaitAsync(0, ct))
         {
-            SetStatus("Re-align skipped • previous adjustment is still settling");
+            SetStatus("Precision Re-align already in progress");
             return;
         }
 
-        _lastManualRealignAt = now;
+        _precisionOperationInProgress = true;
+        var hostWasPaused = true;
+        var activeParticipantIds = new List<string>();
 
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromSeconds(20));
-
-        var firstReceivedAt = DateTimeOffset.UtcNow;
-        var firstSessions = await _api.GetSessionsAsync(timeout.Token);
-        firstReceivedAt = DateTimeOffset.UtcNow;
-
-        await Task.Delay(PositionSampleDelay, timeout.Token);
-
-        var secondSessions = await _api.GetSessionsAsync(timeout.Token);
-        var secondReceivedAt = DateTimeOffset.UtcNow;
-
-        var firstHost = firstSessions.FirstOrDefault(s =>
-            string.Equals(s.Id, _hostSessionId, StringComparison.OrdinalIgnoreCase));
-        var host = secondSessions.FirstOrDefault(s =>
-            string.Equals(s.Id, _hostSessionId, StringComparison.OrdinalIgnoreCase));
-
-        if (host?.NowPlayingItem?.Id is not { Length: > 0 } itemId)
-            throw new InvalidOperationException("The host is no longer reporting active playback.");
-
-        var hostPaused = host.PlayState?.IsPaused == true;
-        var commandTime = DateTimeOffset.UtcNow;
-        var hostPosition = ProjectPosition(firstHost, host, firstReceivedAt, secondReceivedAt, commandTime);
-        var corrected = 0;
-        var alreadyAligned = 0;
-
-        foreach (var participantId in _participantSessionIds)
+        try
         {
-            var firstParticipant = firstSessions.FirstOrDefault(s =>
-                string.Equals(s.Id, participantId, StringComparison.OrdinalIgnoreCase));
-            var participant = secondSessions.FirstOrDefault(s =>
-                string.Equals(s.Id, participantId, StringComparison.OrdinalIgnoreCase));
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(20));
 
-            if (participant is null ||
-                participant.PlayState?.CanSeek == false ||
-                !string.Equals(participant.NowPlayingItem?.Id, itemId, StringComparison.OrdinalIgnoreCase))
-                continue;
+            var sessions = await _api.GetSessionsAsync(timeout.Token);
+            var host = sessions.FirstOrDefault(s =>
+                string.Equals(s.Id, _hostSessionId, StringComparison.OrdinalIgnoreCase));
 
-            var target = hostPaused
+            if (host?.NowPlayingItem?.Id is not { Length: > 0 } itemId)
+                throw new InvalidOperationException("The host is no longer reporting active playback.");
+
+            hostWasPaused = host.PlayState?.IsPaused == true;
+            activeParticipantIds = GetAvailableParticipantIds(sessions, itemId);
+
+            if (activeParticipantIds.Count == 0)
+                throw new InvalidOperationException("No selected participant is currently playing the host item.");
+
+            SetStatus("Precision Re-align • pausing devices…");
+
+            var pauseTasks = new List<Task>
+            {
+                _api.SendPlayStateCommandAsync(_hostSessionId, "Pause", null, timeout.Token)
+            };
+            pauseTasks.AddRange(activeParticipantIds.Select(id =>
+                _api.SendPlayStateCommandAsync(id, "Pause", null, timeout.Token)));
+            await Task.WhenAll(pauseTasks);
+
+            SetStatus("Precision Re-align • locking stable host position…");
+            var anchor = await WaitForStablePausedHostAsync(
+                _hostSessionId,
+                itemId,
+                timeout.Token);
+
+            var hostPosition = anchor.Host.PlayState?.PositionTicks ?? 0;
+            var participantTarget = hostWasPaused
                 ? hostPosition
                 : Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
 
-            var participantPosition = ProjectPosition(
-                firstParticipant,
-                participant,
-                firstReceivedAt,
-                secondReceivedAt,
-                commandTime);
+            SetStatus($"Precision Re-align • setting {_settings.SyncParticipantLeadMilliseconds} ms lead…");
 
-            if (Math.Abs(participantPosition - target) <= RealignSkipToleranceTicks)
-            {
-                alreadyAligned++;
-                continue;
-            }
+            await Task.WhenAll(activeParticipantIds.Select(id =>
+                _api.SendPlayStateCommandAsync(id, "Seek", participantTarget, timeout.Token)));
 
-            await _api.SendPlayStateCommandAsync(participantId, "Seek", target, timeout.Token);
+            // Some Emby clients briefly resume after a remote seek. Give the seek
+            // time to land, then force participants back to the paused anchor.
+            await Task.Delay(CommandSettleDelay, timeout.Token);
+            await Task.WhenAll(activeParticipantIds.Select(id =>
+                _api.SendPlayStateCommandAsync(id, "Pause", null, timeout.Token)));
 
-            if (hostPaused)
+            if (!hostWasPaused)
             {
                 await Task.Delay(CommandSettleDelay, timeout.Token);
-                await _api.SendPlayStateCommandAsync(participantId, "Pause", null, timeout.Token);
+                SetStatus("Precision Re-align • resuming together…");
+
+                var resumeTasks = new List<Task>
+                {
+                    _api.SendPlayStateCommandAsync(_hostSessionId, "Unpause", null, timeout.Token)
+                };
+                resumeTasks.AddRange(activeParticipantIds.Select(id =>
+                    _api.SendPlayStateCommandAsync(id, "Unpause", null, timeout.Token)));
+                await Task.WhenAll(resumeTasks);
             }
 
-            corrected++;
+            await Task.Delay(CommandSettleDelay, timeout.Token);
+            var finalSessions = await _api.GetSessionsAsync(timeout.Token);
+            var finalHost = finalSessions.FirstOrDefault(s =>
+                string.Equals(s.Id, _hostSessionId, StringComparison.OrdinalIgnoreCase));
+            if (finalHost is not null)
+                RememberHostState(finalHost);
+
+            SetStatus(hostWasPaused
+                ? $"Precision Re-align complete • paused at anchor • {_settings.SyncParticipantLeadMilliseconds} ms lead applies on resume"
+                : $"Precision Re-align complete • {_settings.SyncParticipantLeadMilliseconds} ms participant lead");
         }
-
-        if (corrected == 0 && alreadyAligned == 0)
-            throw new InvalidOperationException("No selected participant is currently available for re-alignment.");
-
-        if (corrected == 0)
+        catch
         {
-            SetStatus($"Already aligned • {_settings.SyncParticipantLeadMilliseconds} ms lead • no seek sent");
-            return;
+            if (!hostWasPaused)
+                await BestEffortResumeAsync(_hostSessionId, activeParticipantIds);
+            throw;
         }
-
-        SetStatus($"Re-aligned once • {_settings.SyncParticipantLeadMilliseconds} ms participant lead");
+        finally
+        {
+            _precisionOperationInProgress = false;
+            _precisionGate.Release();
+        }
     }
 
-    private static long ProjectPosition(
-        SessionInfoDto? first,
-        SessionInfoDto second,
-        DateTimeOffset firstReceivedAt,
-        DateTimeOffset secondReceivedAt,
-        DateTimeOffset projectTo)
-    {
-        var secondPosition = second.PlayState?.PositionTicks ?? 0;
-        if (second.PlayState?.IsPaused == true)
-            return Math.Max(0, secondPosition);
-
-        var firstPosition = first?.PlayState?.PositionTicks;
-        var elapsedTicks = Math.Max(1L, (secondReceivedAt - firstReceivedAt).Ticks);
-        var rate = 1d;
-
-        if (firstPosition.HasValue)
-        {
-            var advance = secondPosition - firstPosition.Value;
-
-            // Accept only a plausible forward playback rate. If Emby returns a
-            // stale or jumpy sample, fall back to normal 1x projection instead of
-            // turning that noise into a large correction.
-            var observedRate = advance / (double)elapsedTicks;
-            if (observedRate >= 0.5d && observedRate <= 1.5d)
-                rate = observedRate;
-        }
-
-        var remainingTicks = Math.Max(0L, (projectTo - secondReceivedAt).Ticks);
-        return Math.Max(0, secondPosition + (long)(remainingTicks * rate));
-    }
-
-    public async Task StartAsync(string hostSessionId, IEnumerable<string> participantSessionIds, CancellationToken ct = default)
+    public async Task StartAsync(
+        string hostSessionId,
+        IEnumerable<string> participantSessionIds,
+        CancellationToken ct = default)
     {
         var participants = participantSessionIds
             .Where(id => !string.IsNullOrWhiteSpace(id))
@@ -170,7 +154,7 @@ public sealed class SyncCoordinatorService
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         if (string.IsNullOrWhiteSpace(hostSessionId))
-            throw new InvalidOperationException("Choose a host session first.");
+            throw new InvalidOperationException("Choose a currently playing host device first.");
 
         if (participants.Count == 0)
             throw new InvalidOperationException("Choose at least one participant device.");
@@ -180,52 +164,113 @@ public sealed class SyncCoordinatorService
         _hostSessionId = hostSessionId;
         _participantSessionIds = participants;
 
-        using var initialTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        initialTimeout.CancelAfter(TimeSpan.FromSeconds(30));
+        await _precisionGate.WaitAsync(ct);
+        _precisionOperationInProgress = true;
+        var hostWasPaused = true;
+        var startedParticipantIds = new List<string>();
 
-        var firstReceivedAt = DateTimeOffset.UtcNow;
-        var firstSessions = await _api.GetSessionsAsync(initialTimeout.Token);
-        firstReceivedAt = DateTimeOffset.UtcNow;
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(30));
 
-        var firstHost = firstSessions.FirstOrDefault(s =>
-            string.Equals(s.Id, hostSessionId, StringComparison.OrdinalIgnoreCase))
-            ?? throw new InvalidOperationException("The selected host session is no longer online.");
+            var sessions = await _api.GetSessionsAsync(timeout.Token);
+            var host = sessions.FirstOrDefault(s =>
+                string.Equals(s.Id, hostSessionId, StringComparison.OrdinalIgnoreCase))
+                ?? throw new InvalidOperationException("The selected host session is no longer online.");
 
-        if (firstHost.NowPlayingItem?.Id is not { Length: > 0 })
-            throw new InvalidOperationException("The host must already be playing a movie or episode.");
+            if (host.NowPlayingItem?.Id is not { Length: > 0 } itemId)
+                throw new InvalidOperationException("The host must already be playing a movie or episode.");
 
-        await Task.Delay(PositionSampleDelay, initialTimeout.Token);
+            hostWasPaused = host.PlayState?.IsPaused == true;
 
-        var sessions = await _api.GetSessionsAsync(initialTimeout.Token);
-        var secondReceivedAt = DateTimeOffset.UtcNow;
-        var host = sessions.FirstOrDefault(s =>
-            string.Equals(s.Id, hostSessionId, StringComparison.OrdinalIgnoreCase))
-            ?? throw new InvalidOperationException("The selected host session is no longer online.");
+            SetStatus("Start Together • pausing host to create a stable anchor…");
+            await _api.SendPlayStateCommandAsync(hostSessionId, "Pause", null, timeout.Token);
 
-        if (host.NowPlayingItem?.Id is not { Length: > 0 })
-            throw new InvalidOperationException("The host must already be playing a movie or episode.");
+            var anchor = await WaitForStablePausedHostAsync(
+                hostSessionId,
+                itemId,
+                timeout.Token);
 
-        var projectedHostPosition = ProjectPosition(
-            firstHost,
-            host,
-            firstReceivedAt,
-            secondReceivedAt,
-            DateTimeOffset.UtcNow);
+            var hostPosition = anchor.Host.PlayState?.PositionTicks ?? 0;
+            var participantTarget = hostWasPaused
+                ? hostPosition
+                : Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
 
-        await SyncParticipantsToHostAsync(
-            host,
-            sessions,
-            forcePlay: true,
-            hostSeeked: true,
-            hostPauseStateChanged: true,
-            initialTimeout.Token,
-            projectedHostPosition);
+            foreach (var participantId in participants)
+            {
+                var participant = sessions.FirstOrDefault(s =>
+                    string.Equals(s.Id, participantId, StringComparison.OrdinalIgnoreCase));
 
-        RememberHostState(host);
+                if (participant is null)
+                    continue;
 
-        _syncCts = new CancellationTokenSource();
-        SetStatus($"Sync'EM up active • manual timing • {participants.Count} participant{(participants.Count == 1 ? "" : "s")}");
-        _ = RunLoopAsync(_syncCts.Token);
+                startedParticipantIds.Add(participantId);
+            }
+
+            if (startedParticipantIds.Count == 0)
+                throw new InvalidOperationException("None of the selected participant sessions is currently available.");
+
+            SetStatus("Start Together • loading participants at the anchor…");
+            await Task.WhenAll(startedParticipantIds.Select(id =>
+                _api.PlayOnSessionAsync(id, itemId, participantTarget, timeout.Token)));
+
+            await Task.Delay(CommandSettleDelay, timeout.Token);
+            await Task.WhenAll(startedParticipantIds.Select(id =>
+                _api.SendPlayStateCommandAsync(id, "Pause", null, timeout.Token)));
+
+            // PlayNow can advance briefly before the pause reaches the client.
+            // Re-seek while everything is stopped so every participant shares the
+            // same deterministic anchor before playback resumes.
+            await Task.Delay(CommandSettleDelay, timeout.Token);
+            await Task.WhenAll(startedParticipantIds.Select(id =>
+                _api.SendPlayStateCommandAsync(id, "Seek", participantTarget, timeout.Token)));
+
+            await Task.Delay(CommandSettleDelay, timeout.Token);
+            await Task.WhenAll(startedParticipantIds.Select(id =>
+                _api.SendPlayStateCommandAsync(id, "Pause", null, timeout.Token)));
+
+            if (!hostWasPaused)
+            {
+                SetStatus("Start Together • resuming all devices together…");
+
+                var resumeTasks = new List<Task>
+                {
+                    _api.SendPlayStateCommandAsync(hostSessionId, "Unpause", null, timeout.Token)
+                };
+                resumeTasks.AddRange(startedParticipantIds.Select(id =>
+                    _api.SendPlayStateCommandAsync(id, "Unpause", null, timeout.Token)));
+                await Task.WhenAll(resumeTasks);
+            }
+
+            await Task.Delay(CommandSettleDelay, timeout.Token);
+            var finalSessions = await _api.GetSessionsAsync(timeout.Token);
+            var finalHost = finalSessions.FirstOrDefault(s =>
+                string.Equals(s.Id, hostSessionId, StringComparison.OrdinalIgnoreCase));
+            if (finalHost is not null)
+                RememberHostState(finalHost);
+            else
+                RememberHostState(anchor.Host);
+
+            _syncCts = new CancellationTokenSource();
+            SetStatus($"Sync'EM up active • stable-anchor start • {participants.Count} participant{(participants.Count == 1 ? "" : "s")}");
+            _ = RunLoopAsync(_syncCts.Token);
+        }
+        catch
+        {
+            if (!hostWasPaused)
+                await BestEffortResumeAsync(hostSessionId, startedParticipantIds);
+
+            _hostSessionId = "";
+            _participantSessionIds.Clear();
+            ResetSyncState();
+            throw;
+        }
+        finally
+        {
+            _precisionOperationInProgress = false;
+            _precisionGate.Release();
+        }
     }
 
     public void Stop()
@@ -252,7 +297,14 @@ public sealed class SyncCoordinatorService
                 var delay = _lastHostPaused == true ? PausedSyncInterval : PlayingSyncInterval;
                 await Task.Delay(delay, ct);
 
+                if (_precisionOperationInProgress)
+                    continue;
+
                 var sessions = await _api.GetSessionsAsync(ct);
+
+                if (_precisionOperationInProgress)
+                    continue;
+
                 var host = sessions.FirstOrDefault(s =>
                     string.Equals(s.Id, _hostSessionId, StringComparison.OrdinalIgnoreCase));
 
@@ -268,10 +320,9 @@ public sealed class SyncCoordinatorService
                     _lastHostPaused.HasValue &&
                     _lastHostPaused.Value != (host.PlayState?.IsPaused == true);
 
-                await SyncParticipantsToHostAsync(
+                await MirrorHostEventAsync(
                     host,
                     sessions,
-                    forcePlay: false,
                     hostSeeked,
                     hostPauseStateChanged,
                     ct);
@@ -289,6 +340,139 @@ public sealed class SyncCoordinatorService
         {
             SetStatus($"Sync paused by error • {ex.Message}");
             StopFromLoop();
+        }
+    }
+
+    private async Task MirrorHostEventAsync(
+        SessionInfoDto host,
+        IReadOnlyCollection<SessionInfoDto> sessions,
+        bool hostSeeked,
+        bool hostPauseStateChanged,
+        CancellationToken ct)
+    {
+        var itemId = host.NowPlayingItem?.Id;
+        if (string.IsNullOrWhiteSpace(itemId))
+            return;
+
+        var hostPosition = host.PlayState?.PositionTicks ?? 0;
+        var hostPaused = host.PlayState?.IsPaused == true;
+
+        foreach (var participantId in _participantSessionIds)
+        {
+            var participant = sessions.FirstOrDefault(s =>
+                string.Equals(s.Id, participantId, StringComparison.OrdinalIgnoreCase));
+
+            if (participant is null ||
+                !string.Equals(participant.NowPlayingItem?.Id, itemId, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var participantPaused = participant.PlayState?.IsPaused == true;
+
+            if (hostPaused)
+            {
+                if (!participantPaused || hostPauseStateChanged)
+                    await _api.SendPlayStateCommandAsync(participantId, "Pause", null, ct);
+
+                if (hostSeeked && participant.PlayState?.CanSeek != false)
+                {
+                    await _api.SendPlayStateCommandAsync(participantId, "Seek", hostPosition, ct);
+                    await Task.Delay(CommandSettleDelay, ct);
+                    await _api.SendPlayStateCommandAsync(participantId, "Pause", null, ct);
+                }
+
+                continue;
+            }
+
+            if (participantPaused)
+            {
+                if (hostPauseStateChanged && participant.PlayState?.CanSeek != false)
+                {
+                    var resumeTarget = Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
+                    await _api.SendPlayStateCommandAsync(participantId, "Seek", resumeTarget, ct);
+                    await Task.Delay(CommandSettleDelay, ct);
+                }
+
+                await _api.SendPlayStateCommandAsync(participantId, "Unpause", null, ct);
+                continue;
+            }
+
+            if (hostSeeked && participant.PlayState?.CanSeek != false)
+            {
+                var seekTarget = Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
+                await _api.SendPlayStateCommandAsync(participantId, "Seek", seekTarget, ct);
+            }
+        }
+    }
+
+    private async Task<(SessionInfoDto Host, IReadOnlyCollection<SessionInfoDto> Sessions)>
+        WaitForStablePausedHostAsync(
+            string hostSessionId,
+            string itemId,
+            CancellationToken ct)
+    {
+        long? previousPosition = null;
+
+        for (var attempt = 0; attempt < StableAnchorMaxPolls; attempt++)
+        {
+            await Task.Delay(AnchorPollDelay, ct);
+            var sessions = await _api.GetSessionsAsync(ct);
+            var host = sessions.FirstOrDefault(s =>
+                string.Equals(s.Id, hostSessionId, StringComparison.OrdinalIgnoreCase));
+
+            if (host is null ||
+                !string.Equals(host.NowPlayingItem?.Id, itemId, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("The host stopped or changed media while creating the sync anchor.");
+
+            if (host.PlayState?.IsPaused == true)
+            {
+                var position = host.PlayState?.PositionTicks ?? 0;
+
+                if (previousPosition.HasValue &&
+                    Math.Abs(position - previousPosition.Value) <= StableAnchorToleranceTicks)
+                    return (host, sessions);
+
+                previousPosition = position;
+            }
+            else
+            {
+                previousPosition = null;
+            }
+        }
+
+        throw new InvalidOperationException(
+            "The host did not settle into a stable paused position. Precision sync requires a remotely controllable host.");
+    }
+
+    private List<string> GetAvailableParticipantIds(
+        IReadOnlyCollection<SessionInfoDto> sessions,
+        string itemId) =>
+        _participantSessionIds
+            .Where(id =>
+            {
+                var participant = sessions.FirstOrDefault(s =>
+                    string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase));
+
+                return participant is not null &&
+                    participant.PlayState?.CanSeek != false &&
+                    string.Equals(participant.NowPlayingItem?.Id, itemId, StringComparison.OrdinalIgnoreCase);
+            })
+            .ToList();
+
+    private async Task BestEffortResumeAsync(string hostSessionId, IEnumerable<string> participantIds)
+    {
+        try
+        {
+            var tasks = new List<Task>
+            {
+                _api.SendPlayStateCommandAsync(hostSessionId, "Unpause")
+            };
+            tasks.AddRange(participantIds.Select(id =>
+                _api.SendPlayStateCommandAsync(id, "Unpause")));
+            await Task.WhenAll(tasks);
+        }
+        catch
+        {
+            // Recovery only: preserve the original failure.
         }
     }
 
@@ -320,144 +504,12 @@ public sealed class SyncCoordinatorService
         _lastHostObservedAt = DateTimeOffset.UtcNow;
     }
 
-    private async Task SyncParticipantsToHostAsync(
-        SessionInfoDto host,
-        IReadOnlyCollection<SessionInfoDto> sessions,
-        bool forcePlay,
-        bool hostSeeked,
-        bool hostPauseStateChanged,
-        CancellationToken ct,
-        long? hostPositionOverride = null)
-    {
-        var itemId = host.NowPlayingItem?.Id;
-        if (string.IsNullOrWhiteSpace(itemId))
-            return;
-
-        var hostPosition = hostPositionOverride ?? host.PlayState?.PositionTicks ?? 0;
-        var hostPaused = host.PlayState?.IsPaused == true;
-        var tasks = new List<Task>();
-
-        foreach (var participantId in _participantSessionIds)
-        {
-            var participant = sessions.FirstOrDefault(s =>
-                string.Equals(s.Id, participantId, StringComparison.OrdinalIgnoreCase));
-
-            if (participant is null)
-                continue;
-
-            tasks.Add(SyncParticipantAsync(
-                participant,
-                itemId,
-                hostPosition,
-                hostPaused,
-                forcePlay,
-                hostSeeked,
-                hostPauseStateChanged,
-                ct));
-        }
-
-        await Task.WhenAll(tasks);
-    }
-
-    private async Task SyncParticipantAsync(
-        SessionInfoDto participant,
-        string hostItemId,
-        long hostPosition,
-        bool hostPaused,
-        bool forcePlay,
-        bool hostSeeked,
-        bool hostPauseStateChanged,
-        CancellationToken ct)
-    {
-        if (string.IsNullOrWhiteSpace(participant.Id))
-            return;
-
-        var participantId = participant.Id;
-        var sameItem = string.Equals(
-            participant.NowPlayingItem?.Id,
-            hostItemId,
-            StringComparison.OrdinalIgnoreCase);
-
-        if (forcePlay)
-        {
-            var initialPosition = hostPaused
-                ? hostPosition
-                : Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
-
-            await _api.PlayOnSessionAsync(participantId, hostItemId, initialPosition, ct);
-
-            if (hostPaused)
-            {
-                await Task.Delay(CommandSettleDelay, ct);
-                await _api.SendPlayStateCommandAsync(participantId, "Pause", null, ct);
-                await Task.Delay(CommandSettleDelay, ct);
-                await _api.SendPlayStateCommandAsync(participantId, "Seek", hostPosition, ct);
-                await Task.Delay(CommandSettleDelay, ct);
-                await _api.SendPlayStateCommandAsync(participantId, "Pause", null, ct);
-            }
-
-            return;
-        }
-
-        if (!sameItem)
-            return;
-
-        var participantPaused = participant.PlayState?.IsPaused == true;
-
-        if (hostPaused)
-        {
-            if (!participantPaused || hostPauseStateChanged)
-            {
-                await _api.SendPlayStateCommandAsync(participantId, "Pause", null, ct);
-                await Task.Delay(CommandSettleDelay, ct);
-            }
-
-            // Only move the participant while paused when the host actually seeks.
-            // Do not chase Emby's reported paused positions.
-            if (hostSeeked && participant.PlayState?.CanSeek != false)
-            {
-                await _api.SendPlayStateCommandAsync(participantId, "Seek", hostPosition, ct);
-                await Task.Delay(CommandSettleDelay, ct);
-                await _api.SendPlayStateCommandAsync(participantId, "Pause", null, ct);
-            }
-
-            return;
-        }
-
-        if (participantPaused)
-        {
-            // On a genuine host resume, do one lead-adjusted seek before unpausing.
-            // If the participant merely reports paused unexpectedly, just unpause it.
-            if (hostPauseStateChanged && participant.PlayState?.CanSeek != false)
-            {
-                var resumeTarget = Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
-                await _api.SendPlayStateCommandAsync(participantId, "Seek", resumeTarget, ct);
-                await Task.Delay(CommandSettleDelay, ct);
-            }
-
-            await _api.SendPlayStateCommandAsync(participantId, "Unpause", null, ct);
-            return;
-        }
-
-        // A real host timeline change gets exactly one participant seek.
-        if (hostSeeked && participant.PlayState?.CanSeek != false)
-        {
-            var seekTarget = Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
-            await _api.SendPlayStateCommandAsync(participantId, "Seek", seekTarget, ct);
-        }
-
-        // Steady playback intentionally does nothing. No timers, drift chasing,
-        // or periodic seeks are allowed here. Re-align Now is the only manual
-        // timing correction during otherwise steady playback.
-    }
-
     private void ResetSyncState()
     {
         _lastHostItemId = null;
         _lastHostPositionTicks = null;
         _lastHostPaused = null;
         _lastHostObservedAt = null;
-        _lastManualRealignAt = null;
     }
 
     private void StopFromLoop()
