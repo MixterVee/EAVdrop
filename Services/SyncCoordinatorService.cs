@@ -16,16 +16,14 @@ public sealed class SyncCoordinatorService
     // decoding and reporting latency. Do not chase that harmless difference.
     private const long PlayingDriftToleranceTicks = TimeSpan.TicksPerSecond * 4;
     private const long FineAlignmentToleranceTicks = TimeSpan.TicksPerMillisecond * 150;
-    // Real-device testing shows the participant's audible output is consistently
-    // about one second behind the host. While playback is active, intentionally
-    // keep the participant media clock one second ahead. Paused positions still
-    // line up exactly so scrubbing/paused-seek behavior remains predictable.
-    private const long ParticipantPlaybackLeadTicks = TimeSpan.TicksPerSecond;
+    // The participant lead is user-adjustable from the Sync'EM up screen.
+    // Paused positions remain exact; the lead is applied only while playing.
     private const int FineAlignmentMaxAttempts = 3;
     private const long PausedDriftToleranceTicks = TimeSpan.TicksPerSecond * 1;
     private const long HostSeekDetectionTicks = TimeSpan.TicksPerSecond * 6;
 
     private readonly EmbyApiClient _api;
+    private readonly SettingsService _settings;
     private CancellationTokenSource? _syncCts;
     private string _hostSessionId = "";
     private HashSet<string> _participantSessionIds = new(StringComparer.OrdinalIgnoreCase);
@@ -43,9 +41,22 @@ public sealed class SyncCoordinatorService
 
     public event EventHandler<string>? StatusChanged;
 
-    public SyncCoordinatorService(EmbyApiClient api)
+    private long ParticipantPlaybackLeadTicks =>
+        TimeSpan.TicksPerMillisecond * _settings.SyncParticipantLeadMilliseconds;
+
+    public SyncCoordinatorService(EmbyApiClient api, SettingsService settings)
     {
         _api = api;
+        _settings = settings;
+    }
+
+    public void RequestFineAlignment()
+    {
+        if (!IsRunning)
+            return;
+
+        foreach (var participantId in _participantSessionIds)
+            ScheduleFineAlignment(participantId, TimeSpan.Zero, resetAttempts: true);
     }
 
     public async Task StartAsync(string hostSessionId, IEnumerable<string> participantSessionIds, CancellationToken ct = default)
@@ -299,7 +310,7 @@ public sealed class SyncCoordinatorService
             return;
         }
 
-        // When the host resumes, pre-roll the participant one second ahead before
+        // When the host resumes, pre-roll the participant by the selected lead before
         // unpausing. That compensates for the participant's repeatable output delay
         // without ever delaying or otherwise disturbing the host.
         if (participantPaused)
@@ -375,7 +386,7 @@ public sealed class SyncCoordinatorService
             return false;
         }
 
-        // Seek directly to the one-second-ahead media position. The steady-state
+        // Seek directly to the selected lead position. The steady-state
         // drift tolerance intentionally does not fight this offset; fine alignment
         // treats it as the target rather than as drift that should be removed.
         var target = Math.Max(0, desiredParticipantPosition);

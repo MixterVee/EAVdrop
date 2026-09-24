@@ -26,6 +26,7 @@ public sealed class SettingsService
     private const string LegacyApiKeyKey = "emby_api_key";
     private const string AuthenticatedUserIdKey = "authenticated_user_id";
     private const string AuthenticatedUserNameKey = "authenticated_user_name";
+    private const string SyncParticipantLeadMsKey = "sync_participant_lead_ms";
 
     public string LocalUrl
     {
@@ -105,6 +106,12 @@ public sealed class SettingsService
 
     public string AuthenticatedUserId => Preferences.Default.Get(AuthenticatedUserIdKey, "");
     public string AuthenticatedUserName => Preferences.Default.Get(AuthenticatedUserNameKey, "");
+
+    public int SyncParticipantLeadMilliseconds
+    {
+        get => Math.Clamp(Preferences.Default.Get(SyncParticipantLeadMsKey, 500), 0, 2000);
+        set => Preferences.Default.Set(SyncParticipantLeadMsKey, Math.Clamp(value, 0, 2000));
+    }
 
     public async Task<string> GetAccessTokenAsync()
     {

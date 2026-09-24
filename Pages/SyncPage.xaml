@@ -5,7 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     Title="Sync'EM up">
 
-    <Grid Padding="18" RowDefinitions="Auto,Auto,*" RowSpacing="14">
+    <Grid Padding="18" RowDefinitions="Auto,Auto,*,Auto" RowSpacing="14">
         <Grid ColumnDefinitions="*,Auto">
             <VerticalStackLayout Spacing="2">
                 <Label Text="Sync'EM up" FontSize="28" FontAttributes="Bold" />
@@ -78,28 +78,45 @@
                 </DataTemplate>
             </CollectionView.ItemTemplate>
 
-            <CollectionView.Footer>
-                <Border Style="{StaticResource CardBorder}" Margin="0,10,0,0">
-                    <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10" RowSpacing="8">
-                        <Label x:Name="StatusLabel"
-                               Text="Not syncing"
-                               VerticalTextAlignment="Center" />
-                        <Button x:Name="StartButton"
-                                Grid.Column="1"
-                                Text="Start Together"
-                                Clicked="StartClicked" />
-                        <Button x:Name="StopButton"
-                                Grid.Column="2"
-                                Text="Stop Sync"
-                                Clicked="StopClicked"
-                                IsEnabled="False" />
-                        <Label Grid.Row="1"
-                               Grid.ColumnSpan="3"
-                               Text="Sync'EM up mirrors pause/unpause and seek changes from the host and corrects noticeable playback drift."
-                               Style="{StaticResource MutedLabel}" />
-                    </Grid>
-                </Border>
-            </CollectionView.Footer>
         </CollectionView>
+
+        <Border Grid.Row="3" Style="{StaticResource CardBorder}">
+            <VerticalStackLayout Spacing="8">
+                <Label x:Name="StatusLabel"
+                       Text="Not syncing"
+                       LineBreakMode="WordWrap" />
+
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                    <Label Text="Participant lead"
+                           FontAttributes="Bold"
+                           VerticalTextAlignment="Center" />
+                    <Picker x:Name="ParticipantLeadPicker"
+                            Grid.Column="1"
+                            Title="Timing offset"
+                            SelectedIndexChanged="ParticipantLeadChanged"
+                            HorizontalOptions="Fill" />
+                </Grid>
+
+                <Label x:Name="LeadCaptionLabel"
+                       Text="Participant playback is cued 500 ms ahead of the host."
+                       Style="{StaticResource MutedLabel}" />
+
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                    <Button x:Name="StartButton"
+                            Text="Start Together"
+                            Clicked="StartClicked"
+                            HorizontalOptions="Fill" />
+                    <Button x:Name="StopButton"
+                            Grid.Column="1"
+                            Text="Stop Sync"
+                            Clicked="StopClicked"
+                            IsEnabled="False"
+                            HorizontalOptions="Fill" />
+                </Grid>
+
+                <Label Text="The device list scrolls independently, so Start Together and timing adjustment stay visible."
+                       Style="{StaticResource MutedLabel}" />
+            </VerticalStackLayout>
+        </Border>
     </Grid>
 </ContentPage>

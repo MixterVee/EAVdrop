@@ -6,8 +6,12 @@ namespace EAVdrop.Pages;
 
 public partial class SyncPage : ContentPage
 {
+    private static readonly int[] ParticipantLeadOptionsMs =
+        Enumerable.Range(0, 16).Select(i => i * 100).ToArray();
+
     private readonly EmbyApiClient _api;
     private readonly SyncCoordinatorService _sync;
+    private readonly SettingsService _settings;
     private List<SessionInfoDto> _allSessions = [];
     private HashSet<string> _controllableSessionIds = new(StringComparer.OrdinalIgnoreCase);
     private bool _loading;
@@ -17,18 +21,47 @@ public partial class SyncPage : ContentPage
         InitializeComponent();
         _api = MauiProgram.Services.GetRequiredService<EmbyApiClient>();
         _sync = MauiProgram.Services.GetRequiredService<SyncCoordinatorService>();
+        _settings = MauiProgram.Services.GetRequiredService<SettingsService>();
+
+        ParticipantLeadPicker.ItemsSource = ParticipantLeadOptionsMs
+            .Select(ms => ms == 0 ? "0 ms (none)" : $"{ms} ms")
+            .ToList();
+
         _sync.StatusChanged += SyncStatusChanged;
     }
 
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+        var leadIndex = Array.IndexOf(ParticipantLeadOptionsMs, _settings.SyncParticipantLeadMilliseconds);
+        ParticipantLeadPicker.SelectedIndex = leadIndex >= 0 ? leadIndex : 5;
+        UpdateLeadCaption();
+
         UpdateSyncButtons();
         StatusLabel.Text = _sync.Status;
         await LoadSessionsAsync();
     }
 
     private async void RefreshClicked(object sender, EventArgs e) => await LoadSessionsAsync();
+
+    private void ParticipantLeadChanged(object sender, EventArgs e)
+    {
+        var index = ParticipantLeadPicker.SelectedIndex;
+        if (index < 0 || index >= ParticipantLeadOptionsMs.Length)
+            return;
+
+        _settings.SyncParticipantLeadMilliseconds = ParticipantLeadOptionsMs[index];
+        UpdateLeadCaption();
+        _sync.RequestFineAlignment();
+    }
+
+    private void UpdateLeadCaption()
+    {
+        var ms = _settings.SyncParticipantLeadMilliseconds;
+        LeadCaptionLabel.Text = ms == 0
+            ? "No participant timing lead."
+            : $"Participant playback is cued {ms} ms ahead of the host.";
+    }
 
     private void HostChanged(object sender, EventArgs e)
     {
