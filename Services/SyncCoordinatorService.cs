@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using EAVdrop.Models;
 
 namespace EAVdrop.Services;
@@ -7,14 +6,7 @@ public sealed class SyncCoordinatorService
 {
     private static readonly TimeSpan PlayingSyncInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan PausedSyncInterval = TimeSpan.FromMilliseconds(750);
-    private static readonly TimeSpan CorrectionCooldown = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan CommandSettleDelay = TimeSpan.FromMilliseconds(350);
-
-    // Keep normal playback calm. A participant must be more than one second away
-    // from the selected lead target for two consecutive polls before auto-correction.
-    private const long PlayingTargetToleranceTicks = TimeSpan.TicksPerSecond;
-    private const int RequiredConsecutiveDriftSamples = 2;
-    private const long PausedDriftToleranceTicks = TimeSpan.TicksPerSecond;
     private const long HostSeekDetectionTicks = TimeSpan.TicksPerSecond * 6;
 
     private readonly EmbyApiClient _api;
@@ -22,8 +14,6 @@ public sealed class SyncCoordinatorService
     private CancellationTokenSource? _syncCts;
     private string _hostSessionId = "";
     private HashSet<string> _participantSessionIds = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, DateTimeOffset> _lastCorrectionAt = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, int> _driftSamples = new(StringComparer.OrdinalIgnoreCase);
 
     private string? _lastHostItemId;
     private long? _lastHostPositionTicks;
@@ -85,15 +75,13 @@ public sealed class SyncCoordinatorService
                 await _api.SendPlayStateCommandAsync(participantId, "Pause", null, timeout.Token);
             }
 
-            MarkCorrected(participantId);
-            ResetDrift(participantId);
             corrected++;
         }
 
         if (corrected == 0)
             throw new InvalidOperationException("No selected participant is currently available for re-alignment.");
 
-        SetStatus($"Re-aligned • {_settings.SyncParticipantLeadMilliseconds} ms participant lead");
+        SetStatus($"Re-aligned once • {_settings.SyncParticipantLeadMilliseconds} ms participant lead");
     }
 
     public async Task StartAsync(string hostSessionId, IEnumerable<string> participantSessionIds, CancellationToken ct = default)
@@ -118,7 +106,8 @@ public sealed class SyncCoordinatorService
         initialTimeout.CancelAfter(TimeSpan.FromSeconds(30));
 
         var sessions = await _api.GetSessionsAsync(initialTimeout.Token);
-        var host = sessions.FirstOrDefault(s => string.Equals(s.Id, hostSessionId, StringComparison.OrdinalIgnoreCase))
+        var host = sessions.FirstOrDefault(s =>
+            string.Equals(s.Id, hostSessionId, StringComparison.OrdinalIgnoreCase))
             ?? throw new InvalidOperationException("The selected host session is no longer online.");
 
         if (host.NowPlayingItem?.Id is not { Length: > 0 })
@@ -135,7 +124,7 @@ public sealed class SyncCoordinatorService
         RememberHostState(host);
 
         _syncCts = new CancellationTokenSource();
-        SetStatus($"Sync'EM up active • {host.DeviceDisplay} is host • {participants.Count} participant{(participants.Count == 1 ? "" : "s")}");
+        SetStatus($"Sync'EM up active • manual timing • {participants.Count} participant{(participants.Count == 1 ? "" : "s")}");
         _ = RunLoopAsync(_syncCts.Token);
     }
 
@@ -164,7 +153,8 @@ public sealed class SyncCoordinatorService
                 await Task.Delay(delay, ct);
 
                 var sessions = await _api.GetSessionsAsync(ct);
-                var host = sessions.FirstOrDefault(s => string.Equals(s.Id, _hostSessionId, StringComparison.OrdinalIgnoreCase));
+                var host = sessions.FirstOrDefault(s =>
+                    string.Equals(s.Id, _hostSessionId, StringComparison.OrdinalIgnoreCase));
 
                 if (host is null || host.NowPlayingItem?.Id is not { Length: > 0 })
                 {
@@ -189,7 +179,7 @@ public sealed class SyncCoordinatorService
                 RememberHostState(host);
 
                 var stateText = host.PlayState?.IsPaused == true ? "paused" : "steady";
-                SetStatus($"Sync'EM up active • {host.MediaDisplay} • {stateText}");
+                SetStatus($"Sync'EM up active • {host.MediaDisplay} • {stateText} • no auto realignment");
             }
         }
         catch (OperationCanceledException)
@@ -292,14 +282,11 @@ public sealed class SyncCoordinatorService
             var initialPosition = hostPaused
                 ? hostPosition
                 : Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
+
             await _api.PlayOnSessionAsync(participantId, hostItemId, initialPosition, ct);
-            MarkCorrected(participantId);
-            ResetDrift(participantId);
 
             if (hostPaused)
             {
-                // Give the client a moment to create the playback session, then
-                // explicitly leave it paused at the host position.
                 await Task.Delay(CommandSettleDelay, ct);
                 await _api.SendPlayStateCommandAsync(participantId, "Pause", null, ct);
                 await Task.Delay(CommandSettleDelay, ct);
@@ -311,123 +298,60 @@ public sealed class SyncCoordinatorService
             return;
         }
 
-        // After the initial join, never auto-launch media again. Some Emby clients
-        // briefly stop reporting NowPlayingItem during a long pause. Treat that as
-        // a temporary reporting gap instead of sending PlayNow and restarting the item.
         if (!sameItem)
-        {
-            ResetDrift(participantId);
             return;
-        }
 
         var participantPaused = participant.PlayState?.IsPaused == true;
-        var participantPosition = participant.PlayState?.PositionTicks ?? 0;
-        var pausedDrift = Math.Abs(participantPosition - hostPosition);
 
         if (hostPaused)
         {
-            // Pause first. If the host also moved while paused, seek only after
-            // pause has had time to settle, then issue Pause again because some
-            // Emby clients briefly resume after a remote seek.
             if (!participantPaused || hostPauseStateChanged)
             {
                 await _api.SendPlayStateCommandAsync(participantId, "Pause", null, ct);
                 await Task.Delay(CommandSettleDelay, ct);
             }
 
-            var needsPausedCorrection =
-                participant.PlayState?.CanSeek != false &&
-                (hostSeeked || pausedDrift > PausedDriftToleranceTicks);
-
-            if (needsPausedCorrection)
+            // Only move the participant while paused when the host actually seeks.
+            // Do not chase Emby's reported paused positions.
+            if (hostSeeked && participant.PlayState?.CanSeek != false)
             {
                 await _api.SendPlayStateCommandAsync(participantId, "Seek", hostPosition, ct);
                 await Task.Delay(CommandSettleDelay, ct);
                 await _api.SendPlayStateCommandAsync(participantId, "Pause", null, ct);
-                MarkCorrected(participantId);
             }
 
-            ResetDrift(participantId);
             return;
         }
 
-        // When the host resumes, pre-roll the participant by the selected lead before
-        // unpausing. That compensates for the participant's repeatable output delay
-        // without ever delaying or otherwise disturbing the host.
         if (participantPaused)
         {
-            if (participant.PlayState?.CanSeek != false)
+            // On a genuine host resume, do one lead-adjusted seek before unpausing.
+            // If the participant merely reports paused unexpectedly, just unpause it.
+            if (hostPauseStateChanged && participant.PlayState?.CanSeek != false)
             {
                 var resumeTarget = Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
                 await _api.SendPlayStateCommandAsync(participantId, "Seek", resumeTarget, ct);
-                MarkCorrected(participantId);
                 await Task.Delay(CommandSettleDelay, ct);
             }
 
             await _api.SendPlayStateCommandAsync(participantId, "Unpause", null, ct);
-            ResetDrift(participantId);
             return;
         }
 
-        if (participant.PlayState?.CanSeek == false)
-            return;
-
-        // A real host seek is intentional and should be mirrored immediately.
-        // Re-arm fine alignment afterward because the remote client may settle a
-        // little behind or ahead once its decoder catches up.
-        if (hostSeeked)
+        // A real host timeline change gets exactly one participant seek.
+        if (hostSeeked && participant.PlayState?.CanSeek != false)
         {
             var seekTarget = Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
             await _api.SendPlayStateCommandAsync(participantId, "Seek", seekTarget, ct);
-            MarkCorrected(participantId);
-            ResetDrift(participantId);
-            return;
         }
 
-        // During steady playback compare against the selected lead target, but do
-        // not react to one noisy Emby position sample. Only correct after two
-        // consecutive out-of-tolerance polls, then respect the correction cooldown.
-        var desiredParticipantPosition = Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
-        var targetError = Math.Abs(participantPosition - desiredParticipantPosition);
-
-        if (targetError > PlayingTargetToleranceTicks)
-        {
-            var samples = _driftSamples.AddOrUpdate(
-                participantId,
-                1,
-                static (_, current) => current + 1);
-
-            if (samples >= RequiredConsecutiveDriftSamples && CorrectionAllowed(participantId))
-            {
-                await _api.SendPlayStateCommandAsync(participantId, "Seek", desiredParticipantPosition, ct);
-                MarkCorrected(participantId);
-                ResetDrift(participantId);
-            }
-        }
-        else
-        {
-            ResetDrift(participantId);
-        }
+        // Steady playback intentionally does nothing. No timers, drift chasing,
+        // or periodic seeks are allowed here. Re-align Now is the only manual
+        // timing correction during otherwise steady playback.
     }
-
-    private void ResetDrift(string participantId) =>
-        _driftSamples.TryRemove(participantId, out _);
-
-    private bool CorrectionAllowed(string participantId)
-    {
-        if (!_lastCorrectionAt.TryGetValue(participantId, out var lastCorrection))
-            return true;
-
-        return DateTimeOffset.UtcNow - lastCorrection >= CorrectionCooldown;
-    }
-
-    private void MarkCorrected(string participantId) =>
-        _lastCorrectionAt[participantId] = DateTimeOffset.UtcNow;
 
     private void ResetSyncState()
     {
-        _lastCorrectionAt.Clear();
-        _driftSamples.Clear();
         _lastHostItemId = null;
         _lastHostPositionTicks = null;
         _lastHostPaused = null;

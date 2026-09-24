@@ -102,6 +102,9 @@
                             IsEnabled="False" />
                 </Grid>
 
+                <Label Text="Lead changes apply on the next start, host seek, resume, or Re-align Now. Steady playback is left alone."
+                       Style="{StaticResource MutedLabel}" />
+
                 <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
                     <Button x:Name="StartButton"
                             Text="Start Together"
