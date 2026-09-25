@@ -31,6 +31,7 @@ public partial class SyncPage : ContentPage
             .ToList();
 
         _sync.StatusChanged += SyncStatusChanged;
+        TvNavigation.Attach(this, "sync");
     }
 
     protected override async void OnAppearing()
