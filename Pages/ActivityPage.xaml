@@ -5,36 +5,141 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     Title="Activity">
 
-    <Grid Padding="18" RowDefinitions="Auto,Auto,Auto,*" RowSpacing="10">
+    <Grid Padding="18"
+          RowDefinitions="Auto,Auto,Auto,Auto,*"
+          RowSpacing="10">
+
         <Grid ColumnDefinitions="*,Auto">
             <VerticalStackLayout Spacing="2">
-                <Label Text="Activity" FontSize="28" FontAttributes="Bold" />
-                <Label x:Name="RangeCaptionLabel" Text="Playback history" Style="{StaticResource MutedLabel}" />
+                <Label Text="Activity"
+                       FontSize="28"
+                       FontAttributes="Bold" />
+                <Label x:Name="RangeCaptionLabel"
+                       Text="Playback history"
+                       Style="{StaticResource MutedLabel}" />
             </VerticalStackLayout>
-            <Button Grid.Column="1" Text="Refresh" Clicked="RefreshClicked" />
+
+            <Button Grid.Column="1"
+                    Text="Refresh"
+                    Clicked="RefreshClicked"
+                    VerticalOptions="Center" />
         </Grid>
 
-        <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="10">
-            <Picker x:Name="UserPicker" Title="All users" SelectedIndexChanged="FilterChanged" />
-            <SearchBar Grid.Column="1" x:Name="SearchBox" Placeholder="Search playback" TextChanged="SearchChanged" />
+        <Grid Grid.Row="1"
+              ColumnDefinitions="*,*"
+              ColumnSpacing="10">
+            <Picker x:Name="UserPicker"
+                    Title="All users"
+                    SelectedIndexChanged="FilterChanged" />
+            <SearchBar Grid.Column="1"
+                       x:Name="SearchBox"
+                       Placeholder="Title, user or device"
+                       TextChanged="SearchChanged" />
         </Grid>
 
-        <Label Grid.Row="2" x:Name="StatusLabel" Style="{StaticResource MutedLabel}" />
+        <ScrollView Grid.Row="2"
+                    Orientation="Horizontal"
+                    HorizontalScrollBarVisibility="Never">
+            <HorizontalStackLayout Spacing="8">
+                <Button x:Name="AllFilterButton"
+                        Text="All"
+                        CommandParameter="All"
+                        Clicked="QuickFilterClicked"
+                        Padding="14,8"
+                        FontSize="13" />
+                <Button x:Name="PlayingFilterButton"
+                        Text="Playing Now"
+                        CommandParameter="PlayingNow"
+                        Clicked="QuickFilterClicked"
+                        Padding="14,8"
+                        FontSize="13" />
+                <Button x:Name="MoviesFilterButton"
+                        Text="Movies"
+                        CommandParameter="Movies"
+                        Clicked="QuickFilterClicked"
+                        Padding="14,8"
+                        FontSize="13" />
+                <Button x:Name="EpisodesFilterButton"
+                        Text="Episodes"
+                        CommandParameter="Episodes"
+                        Clicked="QuickFilterClicked"
+                        Padding="14,8"
+                        FontSize="13" />
+                <Button x:Name="MusicFilterButton"
+                        Text="Music"
+                        CommandParameter="Music"
+                        Clicked="QuickFilterClicked"
+                        Padding="14,8"
+                        FontSize="13" />
+            </HorizontalStackLayout>
+        </ScrollView>
 
-        <CollectionView Grid.Row="3" x:Name="ActivityView" SelectionMode="None">
+        <VerticalStackLayout Grid.Row="3" Spacing="1">
+            <Label x:Name="StatusLabel"
+                   Style="{StaticResource MutedLabel}" />
+            <Label x:Name="LastUpdatedLabel"
+                   Text="Not refreshed yet"
+                   Style="{StaticResource MutedLabel}"
+                   FontSize="12" />
+        </VerticalStackLayout>
+
+        <CollectionView Grid.Row="4"
+                        x:Name="ActivityView"
+                        SelectionMode="None">
             <CollectionView.EmptyView>
-                <Label Text="No playback in the selected history range." Style="{StaticResource MutedLabel}" HorizontalOptions="Center" Margin="0,40" />
+                <Label x:Name="EmptyLabel"
+                       Text="No activity matches these filters."
+                       Style="{StaticResource MutedLabel}"
+                       HorizontalOptions="Center"
+                       HorizontalTextAlignment="Center"
+                       Margin="0,40" />
             </CollectionView.EmptyView>
+
             <CollectionView.ItemTemplate>
                 <DataTemplate>
                     <Border Style="{StaticResource CardBorder}">
-                        <VerticalStackLayout Spacing="4">
-                            <Grid ColumnDefinitions="*,Auto">
-                                <Label Text="{Binding Title}" FontAttributes="Bold" FontSize="17" />
-                                <Label Grid.Column="1" Text="{Binding DateDisplay}" Style="{StaticResource MutedLabel}" />
-                            </Grid>
-                            <Label Text="{Binding UserName}" TextColor="{StaticResource EavAccent}" />
-                        </VerticalStackLayout>
+                        <Grid RowDefinitions="Auto,Auto,Auto,Auto"
+                              ColumnDefinitions="*,Auto"
+                              RowSpacing="4"
+                              ColumnSpacing="12">
+
+                            <Label Text="{Binding Eyebrow}"
+                                   TextColor="{StaticResource EavAccent}"
+                                   FontAttributes="Bold"
+                                   FontSize="12" />
+
+                            <Label Grid.Column="1"
+                                   Text="{Binding DateDisplay}"
+                                   Style="{StaticResource MutedLabel}"
+                                   FontSize="12"
+                                   VerticalTextAlignment="Center" />
+
+                            <Label Grid.Row="1"
+                                   Grid.ColumnSpan="2"
+                                   Text="{Binding Title}"
+                                   FontAttributes="Bold"
+                                   FontSize="18"
+                                   LineBreakMode="TailTruncation" />
+
+                            <Label Grid.Row="2"
+                                   Grid.ColumnSpan="2"
+                                   Text="{Binding DetailLine}"
+                                   Style="{StaticResource MutedLabel}"
+                                   LineBreakMode="TailTruncation" />
+
+                            <VerticalStackLayout Grid.Row="3"
+                                                 Grid.ColumnSpan="2"
+                                                 Spacing="4">
+                                <Label Text="{Binding SecondaryDetailLine}"
+                                       IsVisible="{Binding HasSecondaryDetail}"
+                                       Style="{StaticResource MutedLabel}"
+                                       FontSize="12"
+                                       LineBreakMode="TailTruncation" />
+                                <ProgressBar Progress="{Binding Progress}"
+                                             IsVisible="{Binding ShowProgress}"
+                                             HeightRequest="5" />
+                            </VerticalStackLayout>
+                        </Grid>
                     </Border>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
