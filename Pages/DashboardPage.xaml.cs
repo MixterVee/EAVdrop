@@ -13,6 +13,7 @@ public partial class DashboardPage : ContentPage
     {
         InitializeComponent();
         _api = MauiProgram.Services.GetRequiredService<EmbyApiClient>();
+        TvNavigation.Attach(this, "dashboard");
     }
 
     protected override async void OnAppearing()
