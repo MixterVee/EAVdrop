@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace EAVdrop.Services;
 
 public enum ConnectionMode
@@ -27,6 +29,8 @@ public sealed class SettingsService
     private const string AuthenticatedUserIdKey = "authenticated_user_id";
     private const string AuthenticatedUserNameKey = "authenticated_user_name";
     private const string SyncParticipantLeadMsKey = "sync_participant_lead_ms";
+    private const string SyncLastHostIdentityKey = "sync_last_host_identity";
+    private const string SyncLastParticipantIdentitiesKey = "sync_last_participant_identities";
 
     public string LocalUrl
     {
@@ -111,6 +115,42 @@ public sealed class SettingsService
     {
         get => Math.Clamp(Preferences.Default.Get(SyncParticipantLeadMsKey, 500), 0, 2000);
         set => Preferences.Default.Set(SyncParticipantLeadMsKey, Math.Clamp(value, 0, 2000));
+    }
+
+    public string SyncLastHostIdentity
+    {
+        get => Preferences.Default.Get(SyncLastHostIdentityKey, "");
+        set => Preferences.Default.Set(SyncLastHostIdentityKey, value ?? "");
+    }
+
+    public IReadOnlyList<string> SyncLastParticipantIdentities
+    {
+        get
+        {
+            var raw = Preferences.Default.Get(SyncLastParticipantIdentitiesKey, "");
+            if (string.IsNullOrWhiteSpace(raw))
+                return [];
+
+            try
+            {
+                return JsonSerializer.Deserialize<List<string>>(raw) ?? [];
+            }
+            catch
+            {
+                return [];
+            }
+        }
+        set
+        {
+            var clean = (value ?? [])
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            Preferences.Default.Set(
+                SyncLastParticipantIdentitiesKey,
+                JsonSerializer.Serialize(clean));
+        }
     }
 
     public async Task<string> GetAccessTokenAsync()

@@ -43,6 +43,87 @@ public sealed class SyncCoordinatorService
         _settings = settings;
     }
 
+    public async Task<SyncReadyResult> CheckReadyAsync(
+        string hostSessionId,
+        IEnumerable<string> participantSessionIds,
+        string? itemId,
+        bool requireHostPlaying,
+        CancellationToken ct = default)
+    {
+        var participants = participantSessionIds
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Where(id => !string.Equals(id, hostSessionId, StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (string.IsNullOrWhiteSpace(hostSessionId))
+            return SyncReadyResult.NotReady("Choose a host device.");
+
+        if (participants.Count == 0)
+            return SyncReadyResult.NotReady("Choose at least one participant device.");
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(15));
+
+        var sessionsTask = _api.GetSessionsAsync(timeout.Token);
+        var controllableTask = _api.GetControllableSessionsAsync(timeout.Token);
+        await Task.WhenAll(sessionsTask, controllableTask);
+
+        var sessions = await sessionsTask;
+        var controllableIds = (await controllableTask)
+            .Where(s => !string.IsNullOrWhiteSpace(s.Id))
+            .Select(s => s.Id!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var host = sessions.FirstOrDefault(s =>
+            string.Equals(s.Id, hostSessionId, StringComparison.OrdinalIgnoreCase));
+
+        if (host is null)
+            return SyncReadyResult.NotReady("Host device is no longer online.");
+
+        if (requireHostPlaying && !host.IsPlaying)
+            return SyncReadyResult.NotReady("Host is idle. Start media first or use Start from Beginning.");
+
+        var missing = participants
+            .Where(id => !sessions.Any(s =>
+                string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        if (missing.Count > 0)
+            return SyncReadyResult.NotReady(
+                $"{missing.Count} selected participant device{(missing.Count == 1 ? " is" : "s are")} offline.");
+
+        var targetIds = new[] { hostSessionId }.Concat(participants).ToList();
+        var notControllable = targetIds
+            .Where(id =>
+            {
+                var session = sessions.First(s =>
+                    string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase));
+                return !controllableIds.Contains(id) && !session.SupportsRemoteControl;
+            })
+            .ToList();
+
+        if (notControllable.Count > 0)
+            return SyncReadyResult.NotReady(
+                $"{notControllable.Count} selected device{(notControllable.Count == 1 ? " is" : "s are")} not reporting remote-control readiness.");
+
+        if (!string.IsNullOrWhiteSpace(itemId))
+        {
+            try
+            {
+                await _api.GetSyncMediaItemAsync(itemId, timeout.Token);
+            }
+            catch (Exception ex)
+            {
+                return SyncReadyResult.NotReady($"Selected media is not currently available. {ex.Message}");
+            }
+        }
+
+        var deviceCount = participants.Count + 1;
+        return SyncReadyResult.Ready(
+            $"Ready • {deviceCount} devices • {_settings.SyncParticipantLeadMilliseconds} ms lead");
+    }
+
     public async Task RealignNowAsync(CancellationToken ct = default)
     {
         if (!IsRunning)
@@ -689,4 +770,10 @@ public sealed class SyncCoordinatorService
         Status = status;
         StatusChanged?.Invoke(this, status);
     }
+}
+
+public sealed record SyncReadyResult(bool IsReady, string Summary)
+{
+    public static SyncReadyResult Ready(string summary) => new(true, summary);
+    public static SyncReadyResult NotReady(string summary) => new(false, summary);
 }

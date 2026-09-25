@@ -7,7 +7,7 @@ namespace EAVdrop.Services;
 
 public sealed class EmbyApiClient
 {
-    private const string AppVersion = "0.4.16";
+    private const string AppVersion = "0.4.17";
 
     private readonly SettingsService _settings;
     private readonly HttpClient _http = new();
@@ -192,6 +192,46 @@ public sealed class EmbyApiClient
 
         return GetAsync<UserItemQueryResultDto>(
             $"Users/{userId}/Items?Recursive=true&IncludeItemTypes=Movie%2CEpisode&SearchTerm={term}&Limit={limit}&SortBy=SortName&SortOrder=Ascending&Fields=SeriesName",
+            ct);
+    }
+
+    public Task<UserItemQueryResultDto> GetContinueWatchingSyncMediaAsync(
+        int limit = 20,
+        CancellationToken ct = default)
+    {
+        var userId = Uri.EscapeDataString(_settings.AuthenticatedUserId ?? "");
+        return GetAsync<UserItemQueryResultDto>(
+            $"Users/{userId}/Items?Recursive=true&IncludeItemTypes=Movie%2CEpisode&Filters=IsResumable&SortBy=DatePlayed&SortOrder=Descending&Limit={limit}&Fields=SeriesName&EnableUserData=true",
+            ct);
+    }
+
+    public async Task<List<BaseItemDto>> GetRecentSyncMediaAsync(
+        int limit = 20,
+        CancellationToken ct = default)
+    {
+        var result = await GetRecentPlayedItemsAsync(
+            _settings.AuthenticatedUserId,
+            Math.Max(limit * 3, 30),
+            0,
+            ct);
+
+        return result.Items
+            .Where(i =>
+                string.Equals(i.Type, "Movie", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(i.Type, "Episode", StringComparison.OrdinalIgnoreCase))
+            .Where(i => i.UserData?.LastPlayedDate is not null)
+            .OrderByDescending(i => i.UserData!.LastPlayedDate)
+            .Take(limit)
+            .ToList();
+    }
+
+    public Task<BaseItemDto> GetSyncMediaItemAsync(
+        string itemId,
+        CancellationToken ct = default)
+    {
+        var userId = Uri.EscapeDataString(_settings.AuthenticatedUserId ?? "");
+        return GetAsync<BaseItemDto>(
+            $"Users/{userId}/Items/{Uri.EscapeDataString(itemId)}",
             ct);
     }
 

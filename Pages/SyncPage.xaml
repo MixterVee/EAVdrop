@@ -9,7 +9,8 @@
         <Grid ColumnDefinitions="*,Auto">
             <VerticalStackLayout Spacing="2">
                 <Label Text="Sync'EM up" FontSize="28" FontAttributes="Bold" />
-                <Label Text="Watch together, stay together." Style="{StaticResource MutedLabel}" />
+                <Label Text="Pick devices, pick something to watch, and start together."
+                       Style="{StaticResource MutedLabel}" />
             </VerticalStackLayout>
             <Button Grid.Column="1"
                     Text="Refresh"
@@ -20,6 +21,7 @@
         <CollectionView x:Name="ParticipantsView"
                         Grid.Row="1"
                         SelectionMode="Multiple"
+                        SelectionChanged="ParticipantsChanged"
                         VerticalOptions="Fill">
             <CollectionView.ItemsLayout>
                 <LinearItemsLayout Orientation="Vertical" ItemSpacing="10" />
@@ -29,22 +31,34 @@
                 <VerticalStackLayout Spacing="10">
                     <Border Style="{StaticResource CardBorder}">
                         <VerticalStackLayout Spacing="8">
-                            <Label Text="1. Choose the host device" FontSize="19" FontAttributes="Bold" />
-                            <Label Text="For Start from Beginning the host can be idle. Join Current Playback requires the host to already be playing."
-                                   Style="{StaticResource MutedLabel}" />
+                            <Label Text="1. Host device" FontSize="19" FontAttributes="Bold" />
                             <Picker x:Name="HostPicker"
                                     Title="Choose host device"
                                     SelectedIndexChanged="HostChanged" />
                             <Label x:Name="HostMediaLabel"
                                    Text="No host selected"
                                    Style="{StaticResource MutedLabel}" />
+                            <Label x:Name="RememberedSetupLabel"
+                                   Text="Your last working device setup will be restored automatically."
+                                   Style="{StaticResource MutedLabel}" />
                         </VerticalStackLayout>
                     </Border>
 
                     <Border Style="{StaticResource CardBorder}">
                         <VerticalStackLayout Spacing="8">
-                            <Label Text="2. Choose media for Start from Beginning" FontSize="19" FontAttributes="Bold" />
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                            <Label Text="2. What do you want to watch?" FontSize="19" FontAttributes="Bold" />
+
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                <Button Text="Continue Watching"
+                                        Clicked="ContinueWatchingClicked"
+                                        HorizontalOptions="Fill" />
+                                <Button Grid.Column="1"
+                                        Text="Recently Played"
+                                        Clicked="RecentlyPlayedClicked"
+                                        HorizontalOptions="Fill" />
+                            </Grid>
+
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                 <Entry x:Name="MediaSearchEntry"
                                        Placeholder="Search movies or episodes"
                                        Completed="MediaSearchCompleted"
@@ -54,19 +68,20 @@
                                         Text="Search"
                                         Clicked="MediaSearchClicked" />
                             </Grid>
+
                             <Picker x:Name="MediaPicker"
-                                    Title="Search, then choose a movie or episode"
+                                    Title="Choose a movie or episode"
                                     SelectedIndexChanged="MediaChanged" />
                             <Label x:Name="MediaSearchStatusLabel"
-                                   Text="Not needed when joining current playback."
+                                   Text="Choose Continue Watching, Recently Played, or search."
                                    Style="{StaticResource MutedLabel}" />
                         </VerticalStackLayout>
                     </Border>
 
                     <Border Style="{StaticResource CardBorder}">
                         <VerticalStackLayout Spacing="6">
-                            <Label Text="3. Choose participant devices" FontSize="19" FontAttributes="Bold" />
-                            <Label Text="Select one or more other Emby sessions."
+                            <Label Text="3. Participant devices" FontSize="19" FontAttributes="Bold" />
+                            <Label Text="Select one or more other Emby devices."
                                    Style="{StaticResource MutedLabel}" />
                         </VerticalStackLayout>
                     </Border>
@@ -74,7 +89,7 @@
             </CollectionView.Header>
 
             <CollectionView.EmptyView>
-                <Label Text="Emby is not reporting any other session. Open Emby on the second device, interact with it once, then press Refresh."
+                <Label Text="No other Emby sessions are visible. Open Emby on the other device, interact with it once, then press Refresh."
                        Style="{StaticResource MutedLabel}"
                        HorizontalTextAlignment="Center"
                        HorizontalOptions="Center"
@@ -90,7 +105,6 @@
                                 <Label Text="{Binding UserDisplay}" Style="{StaticResource MutedLabel}" />
                                 <Label Text="{Binding MediaDisplay}" Style="{StaticResource MutedLabel}" />
                                 <Label Text="{Binding SyncControlStatus}" Style="{StaticResource MutedLabel}" />
-                                <Label Text="{Binding LastActivityDisplay}" Style="{StaticResource MutedLabel}" />
                             </VerticalStackLayout>
                             <Label Grid.Column="1"
                                    Text="SELECT"
@@ -105,31 +119,36 @@
 
         <Border Grid.Row="2" Style="{StaticResource CardBorder}">
             <VerticalStackLayout Spacing="8">
-                <Label x:Name="StatusLabel"
-                       Text="Not syncing"
+                <Label x:Name="ReadyLabel"
+                       Text="Choose a host and participant."
+                       FontAttributes="Bold"
                        LineBreakMode="WordWrap" />
 
-                <Label Text="Participant lead"
-                       FontAttributes="Bold" />
+                <Label x:Name="StatusLabel"
+                       Text="Not syncing"
+                       Style="{StaticResource MutedLabel}"
+                       LineBreakMode="WordWrap" />
 
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                    <Label Text="Lead"
+                           VerticalTextAlignment="Center"
+                           FontAttributes="Bold" />
                     <Picker x:Name="ParticipantLeadPicker"
+                            Grid.Column="1"
                             Title="Timing offset"
                             SelectedIndexChanged="ParticipantLeadChanged"
                             HorizontalOptions="Fill" />
                     <Button x:Name="RealignButton"
-                            Grid.Column="1"
+                            Grid.Column="2"
                             Text="Precision Re-align"
                             Clicked="RealignClicked"
                             IsEnabled="False" />
                 </Grid>
 
-                <Label Text="Start from Beginning preloads both players, locks host at 0 ms and participant at the selected lead, then releases them together. Seeks and pauses continue to use Precision Re-align."
-                       Style="{StaticResource MutedLabel}" />
-
                 <Button x:Name="StartFromBeginningButton"
-                        Text="Start from Beginning"
+                        Text="Start Together from Beginning"
                         Clicked="StartFromBeginningClicked"
+                        FontAttributes="Bold"
                         HorizontalOptions="Fill" />
 
                 <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
@@ -144,6 +163,9 @@
                             IsEnabled="False"
                             HorizontalOptions="Fill" />
                 </Grid>
+
+                <Label Text="Preferred: start from the beginning. EAVdrop preloads both players, applies your saved lead, then releases them together."
+                       Style="{StaticResource MutedLabel}" />
             </VerticalStackLayout>
         </Border>
     </Grid>
