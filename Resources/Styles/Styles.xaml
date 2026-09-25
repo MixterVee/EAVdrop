@@ -98,7 +98,6 @@
                             <Setter Property="BackgroundColor" Value="{StaticResource EavAccent}" />
                             <Setter Property="TextColor" Value="#0F172A" />
                             <Setter Property="PlaceholderColor" Value="#334155" />
-                            <Setter Property="Scale" Value="1.04" />
                         </VisualState.Setters>
                     </VisualState>
                 </VisualStateGroup>
@@ -117,7 +116,6 @@
                         <VisualState.Setters>
                             <Setter Property="BackgroundColor" Value="{StaticResource EavAccent}" />
                             <Setter Property="TextColor" Value="#0F172A" />
-                            <Setter Property="Scale" Value="1.04" />
                         </VisualState.Setters>
                     </VisualState>
                 </VisualStateGroup>
@@ -138,7 +136,6 @@
                             <Setter Property="BackgroundColor" Value="{StaticResource EavAccent}" />
                             <Setter Property="TextColor" Value="#0F172A" />
                             <Setter Property="PlaceholderColor" Value="#334155" />
-                            <Setter Property="Scale" Value="1.04" />
                         </VisualState.Setters>
                     </VisualState>
                 </VisualStateGroup>
