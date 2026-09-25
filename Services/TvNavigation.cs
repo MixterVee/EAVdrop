@@ -108,20 +108,82 @@ public static class TvNavigation
 #if ANDROID
         navGrid.Loaded += (_, _) =>
         {
-            for (var i = 0; i < buttons.Count; i++)
+            var nativeButtons = new List<Android.Views.View>();
+
+            // MAUI-created Android views commonly have View.NoId. Android's
+            // nextFocus* APIs require real view IDs, so assign stable runtime IDs
+            // before wiring the D-pad focus graph.
+            foreach (var button in buttons)
             {
-                if (buttons[i].Handler?.PlatformView is not Android.Views.View nativeButton)
+                if (button.Handler?.PlatformView is not Android.Views.View nativeButton)
                     continue;
 
+                if (nativeButton.Id == Android.Views.View.NoId)
+                    nativeButton.Id = Android.Views.View.GenerateViewId();
+
                 nativeButton.Focusable = true;
-                nativeButton.FocusableInTouchMode = true;
-
-                if (i > 0 && buttons[i - 1].Handler?.PlatformView is Android.Views.View left)
-                    nativeButton.NextFocusLeftId = left.Id;
-
-                if (i < buttons.Count - 1 && buttons[i + 1].Handler?.PlatformView is Android.Views.View right)
-                    nativeButton.NextFocusRightId = right.Id;
+                nativeButtons.Add(nativeButton);
             }
+
+            for (var i = 0; i < nativeButtons.Count; i++)
+            {
+                var nativeButton = nativeButtons[i];
+                var buttonIndex = i;
+
+                // Explicit horizontal focus loop for Android TV remotes.
+                nativeButton.NextFocusLeftId =
+                    nativeButtons[(i - 1 + nativeButtons.Count) % nativeButtons.Count].Id;
+                nativeButton.NextFocusRightId =
+                    nativeButtons[(i + 1) % nativeButtons.Count].Id;
+
+                // Do not rely only on Android's geometric focus search. MAUI's
+                // nested handler layout can make that inconsistent on TV, so
+                // consume LEFT/RIGHT ourselves and move focus directly.
+                nativeButton.KeyPress += (_, e) =>
+                {
+                    if (e.Event?.Action != Android.Views.KeyEventActions.Down ||
+                        e.Event.RepeatCount != 0)
+                        return;
+
+                    if (e.KeyCode == Android.Views.Keycode.DpadLeft ||
+                        e.KeyCode == Android.Views.Keycode.DpadRight)
+                    {
+                        var delta = e.KeyCode == Android.Views.Keycode.DpadLeft ? -1 : 1;
+                        var targetIndex =
+                            (buttonIndex + delta + nativeButtons.Count) % nativeButtons.Count;
+
+                        nativeButtons[targetIndex].RequestFocus();
+                        e.Handled = true;
+                        return;
+                    }
+
+                    if (e.KeyCode == Android.Views.Keycode.DpadUp)
+                    {
+                        // Let the user leave the nav bar and reach the page controls.
+                        var next = nativeButton.FocusSearch(Android.Views.FocusSearchDirection.Up);
+                        if (next is not null && !nativeButtons.Contains(next))
+                        {
+                            next.RequestFocus();
+                            e.Handled = true;
+                            return;
+                        }
+
+                        if (originalContent.Handler?.PlatformView is Android.Views.View pageRoot &&
+                            pageRoot.RequestFocus(Android.Views.FocusSearchDirection.Up))
+                        {
+                            e.Handled = true;
+                        }
+                    }
+                };
+            }
+
+            // Put initial TV focus on the currently selected destination.
+            var selectedIndex = Array.FindIndex(
+                Items,
+                x => string.Equals(x.Route, currentRoute, StringComparison.OrdinalIgnoreCase));
+
+            if (selectedIndex >= 0 && selectedIndex < nativeButtons.Count)
+                nativeButtons[selectedIndex].RequestFocus();
         };
 #endif
 
