@@ -1,7 +1,14 @@
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+
 namespace EAVdrop.Models;
 
-public sealed class DeviceStatusItem
+public sealed class DeviceStatusItem : INotifyPropertyChanged
 {
+    private string _progressText = "";
+    private double _progress;
+    private DateTimeOffset? _lastActivityDate;
+
     public string SessionId { get; set; } = "";
     public string UserName { get; set; } = "Unknown user";
     public string DeviceName { get; set; } = "Unknown device";
@@ -11,14 +18,53 @@ public sealed class DeviceStatusItem
     public string PlaybackMethod { get; set; } = "";
     public string StreamDetails { get; set; } = "";
     public string QualityDisplay { get; set; } = "";
-    public string ProgressText { get; set; } = "";
-    public double Progress { get; set; }
     public string Endpoint { get; set; } = "";
-    public DateTimeOffset? LastActivityDate { get; set; }
     public bool IsPlaying { get; set; }
     public bool IsPaused { get; set; }
     public bool IsTranscoding { get; set; }
     public bool SupportsRemoteControl { get; set; }
+
+    public string ProgressText
+    {
+        get => _progressText;
+        set
+        {
+            if (string.Equals(_progressText, value, StringComparison.Ordinal))
+                return;
+
+            _progressText = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(SecondaryDetail));
+        }
+    }
+
+    public double Progress
+    {
+        get => _progress;
+        set
+        {
+            if (Math.Abs(_progress - value) < 0.0001)
+                return;
+
+            _progress = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public DateTimeOffset? LastActivityDate
+    {
+        get => _lastActivityDate;
+        set
+        {
+            if (_lastActivityDate == value)
+                return;
+
+            _lastActivityDate = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(LastActivityDisplay));
+            OnPropertyChanged(nameof(ConnectionDetail));
+        }
+    }
 
     public string DeviceDisplay =>
         string.Join(
@@ -91,4 +137,32 @@ public sealed class DeviceStatusItem
         StreamDetails.Contains(search, StringComparison.OrdinalIgnoreCase) ||
         QualityDisplay.Contains(search, StringComparison.OrdinalIgnoreCase) ||
         Endpoint.Contains(search, StringComparison.OrdinalIgnoreCase);
+
+    public bool HasSameCardState(DeviceStatusItem other) =>
+        string.Equals(SessionId, other.SessionId, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(UserName, other.UserName, StringComparison.Ordinal) &&
+        string.Equals(DeviceName, other.DeviceName, StringComparison.Ordinal) &&
+        string.Equals(Client, other.Client, StringComparison.Ordinal) &&
+        string.Equals(MediaTitle, other.MediaTitle, StringComparison.Ordinal) &&
+        string.Equals(MediaType, other.MediaType, StringComparison.Ordinal) &&
+        string.Equals(PlaybackMethod, other.PlaybackMethod, StringComparison.Ordinal) &&
+        string.Equals(StreamDetails, other.StreamDetails, StringComparison.Ordinal) &&
+        string.Equals(QualityDisplay, other.QualityDisplay, StringComparison.Ordinal) &&
+        string.Equals(Endpoint, other.Endpoint, StringComparison.Ordinal) &&
+        IsPlaying == other.IsPlaying &&
+        IsPaused == other.IsPaused &&
+        IsTranscoding == other.IsTranscoding &&
+        SupportsRemoteControl == other.SupportsRemoteControl;
+
+    public void UpdateLiveValues(DeviceStatusItem other)
+    {
+        ProgressText = other.ProgressText;
+        Progress = other.Progress;
+        LastActivityDate = other.LastActivityDate;
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }

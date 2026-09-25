@@ -31,7 +31,7 @@ public partial class DeviceStatusPage : ContentPage
         _refreshCts?.Dispose();
         _refreshCts = new CancellationTokenSource();
 
-        await LoadAsync();
+        await LoadAsync(quiet: false);
 
         _ = RunRefreshLoopAsync(_refreshCts.Token);
     }
@@ -43,7 +43,7 @@ public partial class DeviceStatusPage : ContentPage
     }
 
     private async void RefreshClicked(object sender, EventArgs e) =>
-        await LoadAsync();
+        await LoadAsync(quiet: false);
 
     private void SearchChanged(object sender, TextChangedEventArgs e) =>
         ApplyFilter();
@@ -66,26 +66,28 @@ public partial class DeviceStatusPage : ContentPage
         {
             using var timer = new PeriodicTimer(RefreshInterval);
             while (await timer.WaitForNextTickAsync(ct))
-                await MainThread.InvokeOnMainThreadAsync(LoadAsync);
+                await MainThread.InvokeOnMainThreadAsync(() => LoadAsync(quiet: true));
         }
         catch (OperationCanceledException)
         {
         }
     }
 
-    private async Task LoadAsync()
+    private async Task LoadAsync(bool quiet)
     {
         if (_loading)
             return;
 
         _loading = true;
-        StatusLabel.Text = "Checking Emby device sessions…";
+
+        if (!quiet)
+            StatusLabel.Text = "Checking Emby device sessions…";
 
         try
         {
             var sessions = await _api.GetSessionsAsync();
 
-            _all = sessions
+            var fresh = sessions
                 .Where(s => !string.IsNullOrWhiteSpace(s.Id))
                 .Select(s => new DeviceStatusItem
                 {
@@ -118,8 +120,43 @@ public partial class DeviceStatusPage : ContentPage
                 .ThenBy(x => x.DeviceName)
                 .ToList();
 
+            var existingById = _all.ToDictionary(
+                x => x.SessionId,
+                StringComparer.OrdinalIgnoreCase);
+
+            var sameSessions =
+                fresh.Count == _all.Count &&
+                fresh.All(x => existingById.ContainsKey(x.SessionId));
+
+            var requiresRebind = !sameSessions;
+
+            if (!requiresRebind)
+            {
+                foreach (var item in fresh)
+                {
+                    var existing = existingById[item.SessionId];
+                    if (!existing.HasSameCardState(item))
+                    {
+                        requiresRebind = true;
+                        break;
+                    }
+                }
+            }
+
+            if (requiresRebind)
+            {
+                _all = fresh;
+                ApplyFilter();
+            }
+            else
+            {
+                foreach (var item in fresh)
+                    existingById[item.SessionId].UpdateLiveValues(item);
+
+                UpdateStatusText();
+            }
+
             _lastLoadedAt = DateTimeOffset.Now;
-            ApplyFilter();
             UpdateLastUpdatedText();
         }
         catch (Exception ex)
@@ -162,13 +199,21 @@ public partial class DeviceStatusPage : ContentPage
 
         DevicesView.ItemsSource = list;
 
+        UpdateStatusText(list.Count);
+        EmptyLabel.Text = GetEmptyText(search);
+    }
+
+    private void UpdateStatusText(int? visibleCount = null)
+    {
+        var count = visibleCount ??
+            (DevicesView.ItemsSource as IEnumerable<DeviceStatusItem>)?.Count() ??
+            _all.Count;
+
         var playing = _all.Count(x => x.IsPlaying);
         var transcoding = _all.Count(x => x.IsTranscoding);
 
         StatusLabel.Text =
-            $"{list.Count} shown • {_all.Count} sessions • {playing} playing • {transcoding} transcoding";
-
-        EmptyLabel.Text = GetEmptyText(search);
+            $"{count} shown • {_all.Count} sessions • {playing} playing • {transcoding} transcoding";
     }
 
     private string GetEmptyText(string search)
