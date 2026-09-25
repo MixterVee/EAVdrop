@@ -6,31 +6,83 @@
     Title="User Activity">
 
     <Grid Padding="18" RowDefinitions="Auto,Auto,Auto,*" RowSpacing="12">
-        <VerticalStackLayout Spacing="2">
-            <Label x:Name="UserTitle" Text="User" FontSize="28" FontAttributes="Bold" />
-            <Label x:Name="HistoryRangeLabel" Text="Playback history" Style="{StaticResource MutedLabel}" />
-        </VerticalStackLayout>
+        <Grid ColumnDefinitions="*,Auto">
+            <VerticalStackLayout Spacing="2">
+                <Label x:Name="UserTitle"
+                       Text="User"
+                       FontSize="28"
+                       FontAttributes="Bold" />
+                <Label x:Name="HistoryRangeLabel"
+                       Text="Playback history"
+                       Style="{StaticResource MutedLabel}" />
+            </VerticalStackLayout>
+            <Button Grid.Column="1"
+                    Text="Refresh"
+                    Clicked="RefreshClicked"
+                    VerticalOptions="Center" />
+        </Grid>
 
         <Border Grid.Row="1" Style="{StaticResource CardBorder}">
-            <VerticalStackLayout Spacing="5">
-                <Label x:Name="SummaryTitleLabel" Text="Last Played" FontAttributes="Bold" TextColor="{StaticResource EavAccent}" />
-                <Label x:Name="SummaryMainLabel" Text="Loading…" FontSize="18" />
-                <Label x:Name="SummaryDetailLabel" Style="{StaticResource MutedLabel}" />
+            <VerticalStackLayout Spacing="6">
+                <Label x:Name="SummaryTitleLabel"
+                       Text="Last Played"
+                       FontAttributes="Bold"
+                       TextColor="{StaticResource EavAccent}" />
+                <Label x:Name="SummaryMainLabel"
+                       Text="Loading…"
+                       FontSize="19"
+                       FontAttributes="Bold"
+                       LineBreakMode="TailTruncation" />
+                <Label x:Name="SummaryDetailLabel"
+                       Style="{StaticResource MutedLabel}"
+                       LineBreakMode="WordWrap" />
+                <ProgressBar x:Name="NowPlayingProgressBar"
+                             IsVisible="False"
+                             HeightRequest="5" />
             </VerticalStackLayout>
         </Border>
 
-        <Label Grid.Row="2" x:Name="StatusLabel" Style="{StaticResource MutedLabel}" />
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto">
+            <Label x:Name="StatusLabel"
+                   Style="{StaticResource MutedLabel}"
+                   VerticalTextAlignment="Center" />
+            <Label Grid.Column="1"
+                   Text="Newest first"
+                   Style="{StaticResource MutedLabel}"
+                   VerticalTextAlignment="Center" />
+        </Grid>
 
-        <CollectionView Grid.Row="3" x:Name="ActivityView" SelectionMode="None">
+        <CollectionView Grid.Row="3"
+                        x:Name="ActivityView"
+                        SelectionMode="None">
             <CollectionView.EmptyView>
-                <Label Text="No playback in the selected history range." Style="{StaticResource MutedLabel}" HorizontalOptions="Center" Margin="0,40" />
+                <Label Text="No playback in the selected history range."
+                       Style="{StaticResource MutedLabel}"
+                       HorizontalOptions="Center"
+                       Margin="0,40" />
             </CollectionView.EmptyView>
+
             <CollectionView.ItemTemplate>
                 <DataTemplate>
                     <Border Style="{StaticResource CardBorder}">
-                        <Grid ColumnDefinitions="*,Auto">
-                            <Label Text="{Binding Title}" FontAttributes="Bold" FontSize="17" />
-                            <Label Grid.Column="1" Text="{Binding DateDisplay}" Style="{StaticResource MutedLabel}" VerticalTextAlignment="Center" />
+                        <Grid RowDefinitions="Auto,Auto"
+                              ColumnDefinitions="*,Auto"
+                              RowSpacing="3"
+                              ColumnSpacing="12">
+                            <Label Text="{Binding Title}"
+                                   FontAttributes="Bold"
+                                   FontSize="17"
+                                   LineBreakMode="TailTruncation" />
+                            <Label Grid.Column="1"
+                                   Text="{Binding TypeDisplay}"
+                                   TextColor="{StaticResource EavAccent}"
+                                   FontAttributes="Bold"
+                                   FontSize="12"
+                                   VerticalTextAlignment="Center" />
+                            <Label Grid.Row="1"
+                                   Grid.ColumnSpan="2"
+                                   Text="{Binding DateDisplay}"
+                                   Style="{StaticResource MutedLabel}" />
                         </Grid>
                     </Border>
                 </DataTemplate>

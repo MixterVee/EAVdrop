@@ -10,6 +10,7 @@ public partial class UserActivityPage : ContentPage, IQueryAttributable
     private readonly SettingsService _settings;
     private string _userId = "";
     private string _userName = "User";
+    private bool _loading;
 
     public UserActivityPage()
     {
@@ -20,8 +21,12 @@ public partial class UserActivityPage : ContentPage, IQueryAttributable
 
     public void ApplyQueryAttributes(IDictionary<string, object> query)
     {
-        if (query.TryGetValue("userId", out var id)) _userId = Uri.UnescapeDataString(id?.ToString() ?? "");
-        if (query.TryGetValue("userName", out var name)) _userName = Uri.UnescapeDataString(name?.ToString() ?? "User");
+        if (query.TryGetValue("userId", out var id))
+            _userId = Uri.UnescapeDataString(id?.ToString() ?? "");
+
+        if (query.TryGetValue("userName", out var name))
+            _userName = Uri.UnescapeDataString(name?.ToString() ?? "User");
+
         UserTitle.Text = _userName;
         Title = _userName;
     }
@@ -32,17 +37,26 @@ public partial class UserActivityPage : ContentPage, IQueryAttributable
         await LoadAsync();
     }
 
+    private async void RefreshClicked(object sender, EventArgs e) =>
+        await LoadAsync();
+
     private async Task LoadAsync()
     {
-        if (string.IsNullOrWhiteSpace(_userId)) return;
-        HistoryRangeLabel.Text = $"Playback history — {_settings.HistoryRangeCaption}";
+        if (_loading || string.IsNullOrWhiteSpace(_userId))
+            return;
+
+        _loading = true;
+        HistoryRangeLabel.Text =
+            $"Playback history — {_settings.HistoryRangeCaption}";
         StatusLabel.Text = "Loading playback history…";
 
         try
         {
             var cutoff = _settings.GetPlaybackHistoryCutoff();
             var sessionsTask = _api.GetSessionsAsync();
-            var playedItemsTask = _api.GetPlaybackHistoryItemsAsync(_userId, cutoff);
+            var playedItemsTask =
+                _api.GetPlaybackHistoryItemsAsync(_userId, cutoff);
+
             await Task.WhenAll(sessionsTask, playedItemsTask);
 
             var playback = (await playedItemsTask)
@@ -59,28 +73,44 @@ public partial class UserActivityPage : ContentPage, IQueryAttributable
                 .ToList();
 
             var playing = (await sessionsTask)
-                .FirstOrDefault(s => string.Equals(s.UserId, _userId, StringComparison.OrdinalIgnoreCase) && s.NowPlayingItem is not null);
+                .Where(s =>
+                    string.Equals(
+                        s.UserId,
+                        _userId,
+                        StringComparison.OrdinalIgnoreCase) &&
+                    s.NowPlayingItem is not null)
+                .OrderByDescending(s => s.LastActivityDate)
+                .FirstOrDefault();
 
             if (playing is not null)
             {
-                SummaryTitleLabel.Text = "Now Playing";
+                SummaryTitleLabel.Text = "NOW PLAYING";
                 SummaryMainLabel.Text = playing.MediaDisplay;
-                SummaryDetailLabel.Text = JoinParts(playing.PlaybackMethod, playing.DeviceDisplay, playing.ProgressText);
+                SummaryDetailLabel.Text = JoinParts(
+                    playing.PlaybackMethod,
+                    playing.DeviceDisplay,
+                    playing.ProgressText);
+                NowPlayingProgressBar.Progress = playing.Progress;
+                NowPlayingProgressBar.IsVisible = true;
             }
             else if (playback.FirstOrDefault() is PlaybackHistoryItem lastPlayed)
             {
-                SummaryTitleLabel.Text = "Last Played";
+                SummaryTitleLabel.Text = "LAST PLAYED";
                 SummaryMainLabel.Text = lastPlayed.Title;
-                SummaryDetailLabel.Text = lastPlayed.DateDisplay;
+                SummaryDetailLabel.Text =
+                    $"{lastPlayed.TypeDisplay} • {lastPlayed.DateDisplay}";
+                NowPlayingProgressBar.IsVisible = false;
             }
             else
             {
-                SummaryTitleLabel.Text = "Last Played";
+                SummaryTitleLabel.Text = "LAST PLAYED";
                 SummaryMainLabel.Text = _settings.NoPlaybackText;
                 SummaryDetailLabel.Text = "";
+                NowPlayingProgressBar.IsVisible = false;
             }
 
             ActivityView.ItemsSource = playback;
+
             StatusLabel.Text = playback.Count == 1
                 ? $"1 item from {_settings.HistoryRangeCaption}"
                 : $"{playback.Count} items from {_settings.HistoryRangeCaption}";
@@ -88,10 +118,17 @@ public partial class UserActivityPage : ContentPage, IQueryAttributable
         catch (Exception ex)
         {
             ActivityView.ItemsSource = null;
+            NowPlayingProgressBar.IsVisible = false;
             StatusLabel.Text = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
         }
     }
 
     private static string JoinParts(params string?[] parts) =>
-        string.Join(" • ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
+        string.Join(
+            " • ",
+            parts.Where(p => !string.IsNullOrWhiteSpace(p)));
 }

@@ -9,20 +9,92 @@
         <Grid ColumnDefinitions="*,Auto">
             <VerticalStackLayout Spacing="2">
                 <Label Text="Users" FontSize="28" FontAttributes="Bold" />
-                <Label x:Name="RangeCaptionLabel" Text="Recent playback" Style="{StaticResource MutedLabel}" />
+                <Label x:Name="RangeCaptionLabel"
+                       Text="Recent playback"
+                       Style="{StaticResource MutedLabel}" />
             </VerticalStackLayout>
-            <Button Grid.Column="1" Text="Refresh" Clicked="RefreshClicked" />
+            <Button Grid.Column="1"
+                    Text="Refresh"
+                    Clicked="RefreshClicked"
+                    VerticalOptions="Center" />
         </Grid>
-        <Label Grid.Row="1" x:Name="StatusLabel" Style="{StaticResource MutedLabel}" />
 
-        <CollectionView Grid.Row="2" x:Name="UsersView" SelectionMode="Single" SelectionChanged="UserSelected">
+        <Label Grid.Row="1"
+               x:Name="StatusLabel"
+               Style="{StaticResource MutedLabel}" />
+
+        <CollectionView Grid.Row="2"
+                        x:Name="UsersView"
+                        SelectionMode="Single"
+                        SelectionChanged="UserSelected">
+            <CollectionView.EmptyView>
+                <Label Text="No Emby users to show."
+                       Style="{StaticResource MutedLabel}"
+                       HorizontalOptions="Center"
+                       Margin="0,40" />
+            </CollectionView.EmptyView>
+
             <CollectionView.ItemTemplate>
                 <DataTemplate>
                     <Border Style="{StaticResource CardBorder}">
-                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" RowSpacing="4">
-                            <Label Text="{Binding Name}" FontSize="20" FontAttributes="Bold" />
-                            <Label Grid.Row="1" Text="{Binding PlaybackSummary}" Style="{StaticResource MutedLabel}" />
-                            <Label Grid.Column="1" Grid.RowSpan="2" Text="View ›" TextColor="{StaticResource EavAccent}" VerticalTextAlignment="Center" FontAttributes="Bold" />
+                        <Grid RowDefinitions="Auto,Auto,Auto,Auto"
+                              ColumnDefinitions="*,Auto"
+                              RowSpacing="7"
+                              ColumnSpacing="10">
+
+                            <Label Text="{Binding Name}"
+                                   FontSize="20"
+                                   FontAttributes="Bold" />
+
+                            <Label Grid.Column="1"
+                                   Text="View ›"
+                                   TextColor="{StaticResource EavAccent}"
+                                   FontAttributes="Bold"
+                                   VerticalTextAlignment="Center" />
+
+                            <VerticalStackLayout Grid.Row="1"
+                                                 Grid.ColumnSpan="2"
+                                                 Spacing="4"
+                                                 IsVisible="{Binding IsNowPlaying}">
+                                <Label Text="NOW PLAYING"
+                                       TextColor="{StaticResource EavAccent}"
+                                       FontAttributes="Bold"
+                                       FontSize="12" />
+                                <Label Text="{Binding NowPlayingTitle}"
+                                       FontSize="18"
+                                       FontAttributes="Bold"
+                                       LineBreakMode="TailTruncation" />
+                                <Label Text="{Binding NowPlayingDetail}"
+                                       Style="{StaticResource MutedLabel}"
+                                       LineBreakMode="TailTruncation" />
+                                <ProgressBar Progress="{Binding NowPlayingProgress}"
+                                             HeightRequest="5" />
+                            </VerticalStackLayout>
+
+                            <VerticalStackLayout Grid.Row="2"
+                                                 Grid.ColumnSpan="2"
+                                                 Spacing="3">
+                                <Label Text="{Binding RecentHeading}"
+                                       FontAttributes="Bold"
+                                       FontSize="13" />
+                                <Label Text="{Binding RecentLine1}"
+                                       IsVisible="{Binding HasRecentLine1}"
+                                       Style="{StaticResource MutedLabel}"
+                                       LineBreakMode="TailTruncation" />
+                                <Label Text="{Binding RecentLine2}"
+                                       IsVisible="{Binding HasRecentLine2}"
+                                       Style="{StaticResource MutedLabel}"
+                                       LineBreakMode="TailTruncation" />
+                                <Label Text="{Binding RecentLine3}"
+                                       IsVisible="{Binding HasRecentLine3}"
+                                       Style="{StaticResource MutedLabel}"
+                                       LineBreakMode="TailTruncation" />
+                            </VerticalStackLayout>
+
+                            <Label Grid.Row="3"
+                                   Grid.ColumnSpan="2"
+                                   Text="{Binding ActivityCountText}"
+                                   Style="{StaticResource MutedLabel}" />
                         </Grid>
                     </Border>
                 </DataTemplate>

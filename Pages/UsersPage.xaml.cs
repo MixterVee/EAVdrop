@@ -25,28 +25,33 @@ public partial class UsersPage : ContentPage
         await LoadAsync(force: false);
     }
 
-    private async void RefreshClicked(object sender, EventArgs e) => await LoadAsync(force: true);
+    private async void RefreshClicked(object sender, EventArgs e) =>
+        await LoadAsync(force: true);
 
     private async Task LoadAsync(bool force)
     {
-        if (_loading) return;
+        if (_loading)
+            return;
 
         var contextKey = GetContextKey();
 
-        // Shell keeps this page alive between tab switches. If nothing relevant
-        // changed, leave the existing cards alone instead of rebuilding the list.
-        if (!force && _hasLoaded && string.Equals(_loadedContextKey, contextKey, StringComparison.Ordinal))
+        if (!force &&
+            _hasLoaded &&
+            string.Equals(_loadedContextKey, contextKey, StringComparison.Ordinal))
         {
-            RangeCaptionLabel.Text = $"Recent playback — {_settings.HistoryRangeCaption}";
+            RangeCaptionLabel.Text =
+                $"Playback overview — {_settings.HistoryRangeCaption}";
             return;
         }
 
         _loading = true;
         var keepExistingOnFailure =
-            _hasLoaded && string.Equals(_loadedContextKey, contextKey, StringComparison.Ordinal);
+            _hasLoaded &&
+            string.Equals(_loadedContextKey, contextKey, StringComparison.Ordinal);
 
-        RangeCaptionLabel.Text = $"Recent playback — {_settings.HistoryRangeCaption}";
-        StatusLabel.Text = "Loading users and playback history…";
+        RangeCaptionLabel.Text =
+            $"Playback overview — {_settings.HistoryRangeCaption}";
+        StatusLabel.Text = "Loading users and recent playback…";
 
         try
         {
@@ -58,6 +63,7 @@ public partial class UsersPage : ContentPage
                 .Where(u => u.Policy?.IsDisabled != true)
                 .OrderBy(u => u.Name)
                 .ToList();
+
             var sessions = await sessionsTask;
             var cutoff = _settings.GetPlaybackHistoryCutoff();
 
@@ -68,41 +74,65 @@ public partial class UsersPage : ContentPage
                     .OrderByDescending(item => item.UserData!.LastPlayedDate)
                     .ToList();
 
-                var playing = sessions.FirstOrDefault(s =>
-                    string.Equals(s.UserId, user.Id, StringComparison.OrdinalIgnoreCase) &&
-                    s.NowPlayingItem is not null);
+                var playing = sessions
+                    .Where(s =>
+                        string.Equals(
+                            s.UserId,
+                            user.Id,
+                            StringComparison.OrdinalIgnoreCase) &&
+                        s.NowPlayingItem is not null)
+                    .OrderByDescending(s => s.LastActivityDate)
+                    .FirstOrDefault();
 
-                string summary;
-                if (playing is not null)
-                {
-                    summary = history.Count > 0
-                        ? $"Now playing {playing.MediaDisplay} • {history.Count} played in {_settings.HistoryRangeCaption}"
-                        : $"Now playing {playing.MediaDisplay}";
-                }
-                else if (history.FirstOrDefault() is { } recent)
-                {
-                    var countText = history.Count == 1 ? "1 item" : $"{history.Count} items";
-                    summary = $"{countText} • Last played {recent.DisplayName} • {recent.UserData!.LastPlayedDate!.Value.LocalDateTime:g}";
-                }
-                else
-                {
-                    summary = _settings.NoPlaybackText;
-                }
+                var recentLines = history
+                    .Take(3)
+                    .Select(item =>
+                    {
+                        var when = item.UserData!.LastPlayedDate!.Value.LocalDateTime;
+                        return $"{item.DisplayName} • {when:g}";
+                    })
+                    .ToList();
+
+                if (recentLines.Count == 0)
+                    recentLines.Add(_settings.NoPlaybackText);
+
+                var countText = history.Count == 1
+                    ? $"1 item in {_settings.HistoryRangeCaption}"
+                    : $"{history.Count} items in {_settings.HistoryRangeCaption}";
 
                 return new UserPlaybackSummary
                 {
                     Id = user.Id,
                     Name = user.Name,
-                    PlaybackSummary = summary
+                    IsNowPlaying = playing is not null,
+                    NowPlayingTitle = playing?.MediaDisplay ?? "",
+                    NowPlayingDetail = playing is null
+                        ? ""
+                        : JoinParts(
+                            playing.PlaybackMethod,
+                            playing.DeviceDisplay,
+                            playing.ProgressText),
+                    NowPlayingProgress = playing?.Progress ?? 0,
+                    ActivityCountText = countText,
+                    RecentHeading = playing is null ? "Recently watched" : "Before that",
+                    RecentLine1 = recentLines.ElementAtOrDefault(0) ?? "",
+                    RecentLine2 = recentLines.ElementAtOrDefault(1) ?? "",
+                    RecentLine3 = recentLines.ElementAtOrDefault(2) ?? ""
                 };
             });
 
             var summaries = (await Task.WhenAll(summaryTasks))
-                .OrderBy(u => u.Name)
+                .OrderByDescending(u => u.IsNowPlaying)
+                .ThenBy(u => u.Name)
                 .ToList();
 
             UsersView.ItemsSource = summaries;
-            StatusLabel.Text = summaries.Count == 1 ? "1 Emby user" : $"{summaries.Count} Emby users";
+
+            var activeCount = summaries.Count(u => u.IsNowPlaying);
+            StatusLabel.Text = activeCount > 0
+                ? $"{summaries.Count} Emby user{(summaries.Count == 1 ? "" : "s")} • {activeCount} playing now"
+                : $"{summaries.Count} Emby user{(summaries.Count == 1 ? "" : "s")}";
+
             _loadedContextKey = contextKey;
             _hasLoaded = true;
         }
@@ -120,7 +150,8 @@ public partial class UsersPage : ContentPage
     }
 
     private string GetContextKey() =>
-        string.Join("|",
+        string.Join(
+            "|",
             _settings.AuthenticatedUserId,
             _settings.Mode,
             _settings.LocalUrl,
@@ -129,8 +160,17 @@ public partial class UsersPage : ContentPage
 
     private async void UserSelected(object sender, SelectionChangedEventArgs e)
     {
-        if (e.CurrentSelection.FirstOrDefault() is not UserPlaybackSummary user) return;
+        if (e.CurrentSelection.FirstOrDefault() is not UserPlaybackSummary user)
+            return;
+
         UsersView.SelectedItem = null;
-        await Shell.Current.GoToAsync($"{nameof(UserActivityPage)}?userId={Uri.EscapeDataString(user.Id)}&userName={Uri.EscapeDataString(user.Name)}");
+
+        await Shell.Current.GoToAsync(
+            $"{nameof(UserActivityPage)}?userId={Uri.EscapeDataString(user.Id)}&userName={Uri.EscapeDataString(user.Name)}");
     }
+
+    private static string JoinParts(params string?[] parts) =>
+        string.Join(
+            " • ",
+            parts.Where(p => !string.IsNullOrWhiteSpace(p)));
 }
