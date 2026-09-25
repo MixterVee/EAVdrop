@@ -21,6 +21,7 @@ public partial class UsersPage : ContentPage
         _api = MauiProgram.Services.GetRequiredService<EmbyApiClient>();
         _settings = MauiProgram.Services.GetRequiredService<SettingsService>();
         UpdateFavoritesButton();
+        TvNavigation.Attach(this, "users");
     }
 
     protected override async void OnAppearing()
