@@ -8,8 +8,8 @@ public sealed class SyncCoordinatorService
     private static readonly TimeSpan PausedSyncInterval = TimeSpan.FromMilliseconds(750);
     private static readonly TimeSpan CommandSettleDelay = TimeSpan.FromMilliseconds(350);
     private static readonly TimeSpan AnchorPollDelay = TimeSpan.FromMilliseconds(250);
-    private const long StableAnchorToleranceTicks = TimeSpan.TicksPerMillisecond * 100;
-    private const int StableAnchorMaxPolls = 12;
+    private const long StableAnchorToleranceTicks = 0;
+    private const int StableAnchorMaxPolls = 16;
     private const long HostSeekDetectionTicks = TimeSpan.TicksPerSecond * 6;
 
     private readonly EmbyApiClient _api;
@@ -33,6 +33,9 @@ public sealed class SyncCoordinatorService
 
     private long ParticipantPlaybackLeadTicks =>
         TimeSpan.TicksPerMillisecond * _settings.SyncParticipantLeadMilliseconds;
+
+    private long GetParticipantTarget(long hostPosition) =>
+        Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
 
     public SyncCoordinatorService(EmbyApiClient api, SettingsService settings)
     {
@@ -92,7 +95,7 @@ public sealed class SyncCoordinatorService
             var hostPosition = anchor.Host.PlayState?.PositionTicks ?? 0;
             // Establish the selected lead while everything is stationary. This
             // means a later resume only needs Unpause; it must not seek again.
-            var participantTarget = Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
+            var participantTarget = GetParticipantTarget(hostPosition);
 
             SetStatus($"Precision Re-align • setting {_settings.SyncParticipantLeadMilliseconds} ms lead…");
 
@@ -195,7 +198,7 @@ public sealed class SyncCoordinatorService
             var hostPosition = anchor.Host.PlayState?.PositionTicks ?? 0;
             // Establish the selected lead while everything is stationary. This
             // means a later resume only needs Unpause; it must not seek again.
-            var participantTarget = Math.Max(0, hostPosition + ParticipantPlaybackLeadTicks);
+            var participantTarget = GetParticipantTarget(hostPosition);
 
             foreach (var participantId in participants)
             {
@@ -327,8 +330,8 @@ public sealed class SyncCoordinatorService
                 if (hostSeeked || (hostPauseStateChanged && hostPaused))
                 {
                     SetStatus(hostSeeked
-                        ? "Host seek detected • running Precision Re-align…"
-                        : "Host paused • running Precision Re-align…");
+                        ? $"Host seek detected • Precision Re-align at {_settings.SyncParticipantLeadMilliseconds} ms…"
+                        : $"Host paused • Precision Re-align at {_settings.SyncParticipantLeadMilliseconds} ms…");
                     await RealignNowAsync(ct);
                     continue;
                 }
