@@ -21,6 +21,7 @@ public partial class DeviceStatusPage : ContentPage
         InitializeComponent();
         _api = MauiProgram.Services.GetRequiredService<EmbyApiClient>();
         UpdateQuickFilterButtons();
+        TvNavigation.Attach(this, "devices");
     }
 
     protected override async void OnAppearing()
