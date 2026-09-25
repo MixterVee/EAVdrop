@@ -11,23 +11,18 @@
 
         <Grid ColumnDefinitions="*,Auto">
             <VerticalStackLayout Spacing="2">
-                <Label Text="Activity"
-                       FontSize="28"
-                       FontAttributes="Bold" />
+                <Label Text="Activity" FontSize="28" FontAttributes="Bold" />
                 <Label x:Name="RangeCaptionLabel"
                        Text="Playback history"
                        Style="{StaticResource MutedLabel}" />
             </VerticalStackLayout>
-
             <Button Grid.Column="1"
                     Text="Refresh"
                     Clicked="RefreshClicked"
                     VerticalOptions="Center" />
         </Grid>
 
-        <Grid Grid.Row="1"
-              ColumnDefinitions="*,*"
-              ColumnSpacing="10">
+        <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="10">
             <Picker x:Name="UserPicker"
                     Title="All users"
                     SelectedIndexChanged="FilterChanged" />
@@ -41,42 +36,16 @@
                     Orientation="Horizontal"
                     HorizontalScrollBarVisibility="Never">
             <HorizontalStackLayout Spacing="8">
-                <Button x:Name="AllFilterButton"
-                        Text="All"
-                        CommandParameter="All"
-                        Clicked="QuickFilterClicked"
-                        Padding="14,8"
-                        FontSize="13" />
-                <Button x:Name="PlayingFilterButton"
-                        Text="Playing Now"
-                        CommandParameter="PlayingNow"
-                        Clicked="QuickFilterClicked"
-                        Padding="14,8"
-                        FontSize="13" />
-                <Button x:Name="MoviesFilterButton"
-                        Text="Movies"
-                        CommandParameter="Movies"
-                        Clicked="QuickFilterClicked"
-                        Padding="14,8"
-                        FontSize="13" />
-                <Button x:Name="EpisodesFilterButton"
-                        Text="Episodes"
-                        CommandParameter="Episodes"
-                        Clicked="QuickFilterClicked"
-                        Padding="14,8"
-                        FontSize="13" />
-                <Button x:Name="MusicFilterButton"
-                        Text="Music"
-                        CommandParameter="Music"
-                        Clicked="QuickFilterClicked"
-                        Padding="14,8"
-                        FontSize="13" />
+                <Button x:Name="AllFilterButton" Text="All" CommandParameter="All" Clicked="QuickFilterClicked" Padding="14,8" FontSize="13" />
+                <Button x:Name="PlayingFilterButton" Text="Playing Now" CommandParameter="PlayingNow" Clicked="QuickFilterClicked" Padding="14,8" FontSize="13" />
+                <Button x:Name="MoviesFilterButton" Text="Movies" CommandParameter="Movies" Clicked="QuickFilterClicked" Padding="14,8" FontSize="13" />
+                <Button x:Name="EpisodesFilterButton" Text="Episodes" CommandParameter="Episodes" Clicked="QuickFilterClicked" Padding="14,8" FontSize="13" />
+                <Button x:Name="MusicFilterButton" Text="Music" CommandParameter="Music" Clicked="QuickFilterClicked" Padding="14,8" FontSize="13" />
             </HorizontalStackLayout>
         </ScrollView>
 
         <VerticalStackLayout Grid.Row="3" Spacing="1">
-            <Label x:Name="StatusLabel"
-                   Style="{StaticResource MutedLabel}" />
+            <Label x:Name="StatusLabel" Style="{StaticResource MutedLabel}" />
             <Label x:Name="LastUpdatedLabel"
                    Text="Not refreshed yet"
                    Style="{StaticResource MutedLabel}"
@@ -97,44 +66,41 @@
 
             <CollectionView.ItemTemplate>
                 <DataTemplate>
-                    <Border Style="{StaticResource CardBorder}">
+                    <Border Style="{StaticResource MediaCardBorder}">
                         <Grid RowDefinitions="Auto,Auto,Auto,Auto"
-                              ColumnDefinitions="*,Auto"
-                              RowSpacing="4"
-                              ColumnSpacing="12">
-
-                            <Label Text="{Binding Eyebrow}"
-                                   TextColor="{StaticResource EavAccent}"
-                                   FontAttributes="Bold"
-                                   FontSize="12" />
+                              ColumnDefinitions="4,*,Auto"
+                              RowSpacing="5"
+                              ColumnSpacing="10">
+                            <BoxView Grid.RowSpan="4"
+                                     BackgroundColor="{StaticResource EavAccent}" />
 
                             <Label Grid.Column="1"
+                                   Text="{Binding Eyebrow}"
+                                   Style="{StaticResource MediaEyebrowLabel}" />
+                            <Label Grid.Column="2"
                                    Text="{Binding DateDisplay}"
-                                   Style="{StaticResource MutedLabel}"
-                                   FontSize="12"
+                                   Style="{StaticResource MediaMetaLabel}"
                                    VerticalTextAlignment="Center" />
 
                             <Label Grid.Row="1"
+                                   Grid.Column="1"
                                    Grid.ColumnSpan="2"
                                    Text="{Binding Title}"
-                                   FontAttributes="Bold"
-                                   FontSize="18"
-                                   LineBreakMode="TailTruncation" />
+                                   Style="{StaticResource MediaTitleLabel}" />
 
                             <Label Grid.Row="2"
+                                   Grid.Column="1"
                                    Grid.ColumnSpan="2"
                                    Text="{Binding DetailLine}"
-                                   Style="{StaticResource MutedLabel}"
-                                   LineBreakMode="TailTruncation" />
+                                   Style="{StaticResource MediaMetaLabel}" />
 
                             <VerticalStackLayout Grid.Row="3"
+                                                 Grid.Column="1"
                                                  Grid.ColumnSpan="2"
-                                                 Spacing="4">
+                                                 Spacing="5">
                                 <Label Text="{Binding SecondaryDetailLine}"
                                        IsVisible="{Binding HasSecondaryDetail}"
-                                       Style="{StaticResource MutedLabel}"
-                                       FontSize="12"
-                                       LineBreakMode="TailTruncation" />
+                                       Style="{StaticResource MediaMetaLabel}" />
                                 <ProgressBar Progress="{Binding Progress}"
                                              IsVisible="{Binding ShowProgress}"
                                              HeightRequest="5" />

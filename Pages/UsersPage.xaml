@@ -52,24 +52,34 @@
                                    FontAttributes="Bold"
                                    VerticalTextAlignment="Center" />
 
-                            <VerticalStackLayout Grid.Row="1"
-                                                 Grid.ColumnSpan="2"
-                                                 Spacing="4"
-                                                 IsVisible="{Binding IsNowPlaying}">
-                                <Label Text="NOW PLAYING"
-                                       TextColor="{StaticResource EavAccent}"
-                                       FontAttributes="Bold"
-                                       FontSize="12" />
-                                <Label Text="{Binding NowPlayingTitle}"
-                                       FontSize="18"
-                                       FontAttributes="Bold"
-                                       LineBreakMode="TailTruncation" />
-                                <Label Text="{Binding NowPlayingDetail}"
-                                       Style="{StaticResource MutedLabel}"
-                                       LineBreakMode="TailTruncation" />
-                                <ProgressBar Progress="{Binding NowPlayingProgress}"
-                                             HeightRequest="5" />
-                            </VerticalStackLayout>
+                            <Border Grid.Row="1"
+                                    Grid.ColumnSpan="2"
+                                    Style="{StaticResource MediaCardBorder}"
+                                    IsVisible="{Binding IsNowPlaying}"
+                                    Margin="0,2,0,2">
+                                <Grid RowDefinitions="Auto,Auto,Auto,Auto"
+                                      ColumnDefinitions="4,*"
+                                      RowSpacing="4"
+                                      ColumnSpacing="10">
+                                    <BoxView Grid.RowSpan="4"
+                                             BackgroundColor="{StaticResource EavAccent}" />
+                                    <Label Grid.Column="1"
+                                           Text="NOW PLAYING"
+                                           Style="{StaticResource MediaEyebrowLabel}" />
+                                    <Label Grid.Row="1"
+                                           Grid.Column="1"
+                                           Text="{Binding NowPlayingTitle}"
+                                           Style="{StaticResource MediaTitleLabel}" />
+                                    <Label Grid.Row="2"
+                                           Grid.Column="1"
+                                           Text="{Binding NowPlayingDetail}"
+                                           Style="{StaticResource MediaMetaLabel}" />
+                                    <ProgressBar Grid.Row="3"
+                                                 Grid.Column="1"
+                                                 Progress="{Binding NowPlayingProgress}"
+                                                 HeightRequest="5" />
+                                </Grid>
+                            </Border>
 
                             <VerticalStackLayout Grid.Row="2"
                                                  Grid.ColumnSpan="2"

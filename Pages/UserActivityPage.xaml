@@ -22,24 +22,24 @@
                     VerticalOptions="Center" />
         </Grid>
 
-        <Border Grid.Row="1" Style="{StaticResource CardBorder}">
-            <VerticalStackLayout Spacing="6">
-                <Label x:Name="SummaryTitleLabel"
-                       Text="Last Played"
-                       FontAttributes="Bold"
-                       TextColor="{StaticResource EavAccent}" />
-                <Label x:Name="SummaryMainLabel"
-                       Text="Loading…"
-                       FontSize="19"
-                       FontAttributes="Bold"
-                       LineBreakMode="TailTruncation" />
-                <Label x:Name="SummaryDetailLabel"
-                       Style="{StaticResource MutedLabel}"
-                       LineBreakMode="WordWrap" />
-                <ProgressBar x:Name="NowPlayingProgressBar"
-                             IsVisible="False"
-                             HeightRequest="5" />
-            </VerticalStackLayout>
+        <Border Grid.Row="1" Style="{StaticResource MediaCardBorder}">
+            <Grid ColumnDefinitions="4,*" ColumnSpacing="10">
+                <BoxView BackgroundColor="{StaticResource EavAccent}" />
+                <VerticalStackLayout Grid.Column="1" Spacing="6">
+                    <Label x:Name="SummaryTitleLabel"
+                           Text="Last Played"
+                           Style="{StaticResource MediaEyebrowLabel}" />
+                    <Label x:Name="SummaryMainLabel"
+                           Text="Loading…"
+                           Style="{StaticResource MediaTitleLabel}" />
+                    <Label x:Name="SummaryDetailLabel"
+                           Style="{StaticResource MediaMetaLabel}"
+                           LineBreakMode="WordWrap" />
+                    <ProgressBar x:Name="NowPlayingProgressBar"
+                                 IsVisible="False"
+                                 HeightRequest="5" />
+                </VerticalStackLayout>
+            </Grid>
         </Border>
 
         <Grid Grid.Row="2" ColumnDefinitions="*,Auto">
@@ -64,25 +64,30 @@
 
             <CollectionView.ItemTemplate>
                 <DataTemplate>
-                    <Border Style="{StaticResource CardBorder}">
-                        <Grid RowDefinitions="Auto,Auto"
-                              ColumnDefinitions="*,Auto"
-                              RowSpacing="3"
-                              ColumnSpacing="12">
-                            <Label Text="{Binding Title}"
-                                   FontAttributes="Bold"
-                                   FontSize="17"
-                                   LineBreakMode="TailTruncation" />
+                    <Border Style="{StaticResource MediaCardBorder}">
+                        <Grid RowDefinitions="Auto,Auto,Auto"
+                              ColumnDefinitions="4,*,Auto"
+                              RowSpacing="4"
+                              ColumnSpacing="10">
+                            <BoxView Grid.RowSpan="3"
+                                     BackgroundColor="{StaticResource EavAccent}" />
                             <Label Grid.Column="1"
                                    Text="{Binding TypeDisplay}"
-                                   TextColor="{StaticResource EavAccent}"
-                                   FontAttributes="Bold"
-                                   FontSize="12"
+                                   Style="{StaticResource MediaEyebrowLabel}" />
+                            <Label Grid.Column="2"
+                                   Text="{Binding DateDisplay}"
+                                   Style="{StaticResource MediaMetaLabel}"
                                    VerticalTextAlignment="Center" />
                             <Label Grid.Row="1"
+                                   Grid.Column="1"
                                    Grid.ColumnSpan="2"
-                                   Text="{Binding DateDisplay}"
-                                   Style="{StaticResource MutedLabel}" />
+                                   Text="{Binding Title}"
+                                   Style="{StaticResource MediaTitleLabel}" />
+                            <Label Grid.Row="2"
+                                   Grid.Column="1"
+                                   Grid.ColumnSpan="2"
+                                   Text="Playback history"
+                                   Style="{StaticResource MediaMetaLabel}" />
                         </Grid>
                     </Border>
                 </DataTemplate>
