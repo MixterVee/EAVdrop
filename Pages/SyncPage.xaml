@@ -29,11 +29,11 @@
                 <VerticalStackLayout Spacing="10">
                     <Border Style="{StaticResource CardBorder}">
                         <VerticalStackLayout Spacing="8">
-                            <Label Text="1. Choose the host" FontSize="19" FontAttributes="Bold" />
-                            <Label Text="Start the movie or episode normally on one Emby device, then select that active session here."
+                            <Label Text="1. Choose the host device" FontSize="19" FontAttributes="Bold" />
+                            <Label Text="For Start from Beginning the host can be idle. Join Current Playback requires the host to already be playing."
                                    Style="{StaticResource MutedLabel}" />
                             <Picker x:Name="HostPicker"
-                                    Title="Choose currently playing host"
+                                    Title="Choose host device"
                                     SelectedIndexChanged="HostChanged" />
                             <Label x:Name="HostMediaLabel"
                                    Text="No host selected"
@@ -42,8 +42,30 @@
                     </Border>
 
                     <Border Style="{StaticResource CardBorder}">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="2. Choose media for Start from Beginning" FontSize="19" FontAttributes="Bold" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                <Entry x:Name="MediaSearchEntry"
+                                       Placeholder="Search movies or episodes"
+                                       Completed="MediaSearchCompleted"
+                                       ReturnType="Search" />
+                                <Button x:Name="MediaSearchButton"
+                                        Grid.Column="1"
+                                        Text="Search"
+                                        Clicked="MediaSearchClicked" />
+                            </Grid>
+                            <Picker x:Name="MediaPicker"
+                                    Title="Search, then choose a movie or episode"
+                                    SelectedIndexChanged="MediaChanged" />
+                            <Label x:Name="MediaSearchStatusLabel"
+                                   Text="Not needed when joining current playback."
+                                   Style="{StaticResource MutedLabel}" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border Style="{StaticResource CardBorder}">
                         <VerticalStackLayout Spacing="6">
-                            <Label Text="2. Choose participant devices" FontSize="19" FontAttributes="Bold" />
+                            <Label Text="3. Choose participant devices" FontSize="19" FontAttributes="Bold" />
                             <Label Text="Select one or more other Emby sessions."
                                    Style="{StaticResource MutedLabel}" />
                         </VerticalStackLayout>
@@ -102,12 +124,17 @@
                             IsEnabled="False" />
                 </Grid>
 
-                <Label Text="Host seeks and pauses use the exact selected Precision Re-align lead. The anchor now waits for an identical paused host position before applying it; steady playback is otherwise left alone."
+                <Label Text="Start from Beginning preloads both players, locks host at 0 ms and participant at the selected lead, then releases them together. Seeks and pauses continue to use Precision Re-align."
                        Style="{StaticResource MutedLabel}" />
+
+                <Button x:Name="StartFromBeginningButton"
+                        Text="Start from Beginning"
+                        Clicked="StartFromBeginningClicked"
+                        HorizontalOptions="Fill" />
 
                 <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
                     <Button x:Name="StartButton"
-                            Text="Start Together"
+                            Text="Join Current Playback"
                             Clicked="StartClicked"
                             HorizontalOptions="Fill" />
                     <Button x:Name="StopButton"

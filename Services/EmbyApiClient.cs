@@ -7,7 +7,7 @@ namespace EAVdrop.Services;
 
 public sealed class EmbyApiClient
 {
-    private const string AppVersion = "0.4.15";
+    private const string AppVersion = "0.4.16";
 
     private readonly SettingsService _settings;
     private readonly HttpClient _http = new();
@@ -178,6 +178,22 @@ public sealed class EmbyApiClient
 
     public Task<UserQueryResultDto> GetUsersAsync(CancellationToken ct = default) =>
         GetAsync<UserQueryResultDto>("Users/Query?Limit=200&SortOrder=Ascending", ct);
+
+    public Task<UserItemQueryResultDto> SearchSyncMediaAsync(
+        string searchTerm,
+        int limit = 50,
+        CancellationToken ct = default)
+    {
+        var userId = Uri.EscapeDataString(_settings.AuthenticatedUserId ?? "");
+        var term = Uri.EscapeDataString(searchTerm.Trim());
+
+        if (string.IsNullOrWhiteSpace(term))
+            throw new InvalidOperationException("Enter a movie, show, or episode to search for.");
+
+        return GetAsync<UserItemQueryResultDto>(
+            $"Users/{userId}/Items?Recursive=true&IncludeItemTypes=Movie%2CEpisode&SearchTerm={term}&Limit={limit}&SortBy=SortName&SortOrder=Ascending&Fields=SeriesName",
+            ct);
+    }
 
     public Task<UserItemQueryResultDto> GetRecentPlayedItemsAsync(string userId, int limit = 250, int startIndex = 0, CancellationToken ct = default)
     {

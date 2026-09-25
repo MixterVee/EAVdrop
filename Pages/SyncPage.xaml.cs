@@ -15,6 +15,7 @@ public partial class SyncPage : ContentPage
     private List<SessionInfoDto> _allSessions = [];
     private HashSet<string> _controllableSessionIds = new(StringComparer.OrdinalIgnoreCase);
     private bool _loading;
+    private bool _searchingMedia;
 
     public SyncPage()
     {
@@ -33,7 +34,9 @@ public partial class SyncPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        var leadIndex = Array.IndexOf(ParticipantLeadOptionsMs, _settings.SyncParticipantLeadMilliseconds);
+        var leadIndex = Array.IndexOf(
+            ParticipantLeadOptionsMs,
+            _settings.SyncParticipantLeadMilliseconds);
         ParticipantLeadPicker.SelectedIndex = leadIndex >= 0 ? leadIndex : 5;
 
         UpdateSyncButtons();
@@ -41,7 +44,8 @@ public partial class SyncPage : ContentPage
         await LoadSessionsAsync();
     }
 
-    private async void RefreshClicked(object sender, EventArgs e) => await LoadSessionsAsync();
+    private async void RefreshClicked(object sender, EventArgs e) =>
+        await LoadSessionsAsync();
 
     private void ParticipantLeadChanged(object sender, EventArgs e)
     {
@@ -53,7 +57,69 @@ public partial class SyncPage : ContentPage
         _settings.SyncParticipantLeadMilliseconds = ms;
 
         if (_sync.IsRunning)
-            StatusLabel.Text = $"Participant lead set to {ms} ms • tap Re-align Now to apply it immediately.";
+            StatusLabel.Text =
+                $"Participant lead set to {ms} ms • tap Precision Re-align to apply it immediately.";
+    }
+
+    private async void MediaSearchClicked(object sender, EventArgs e) =>
+        await SearchMediaAsync();
+
+    private async void MediaSearchCompleted(object sender, EventArgs e) =>
+        await SearchMediaAsync();
+
+    private void MediaChanged(object sender, EventArgs e)
+    {
+        if (MediaPicker.SelectedItem is BaseItemDto item)
+            MediaSearchStatusLabel.Text = $"Selected • {item.DisplayName}";
+
+        UpdateSyncButtons();
+    }
+
+    private async Task SearchMediaAsync()
+    {
+        if (_searchingMedia)
+            return;
+
+        var term = MediaSearchEntry.Text?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(term))
+        {
+            await DisplayAlert(
+                "Choose media",
+                "Enter part of a movie, show, or episode title first.",
+                "OK");
+            return;
+        }
+
+        _searchingMedia = true;
+        MediaSearchButton.IsEnabled = false;
+        MediaSearchStatusLabel.Text = "Searching Emby library…";
+
+        try
+        {
+            var result = await _api.SearchSyncMediaAsync(term);
+            var items = result.Items
+                .Where(i => !string.IsNullOrWhiteSpace(i.Id))
+                .OrderBy(i => i.DisplayName)
+                .ToList();
+
+            MediaPicker.ItemsSource = items;
+            MediaPicker.ItemDisplayBinding = new Binding(nameof(BaseItemDto.DisplayName));
+            MediaPicker.SelectedItem = items.Count == 1 ? items[0] : null;
+            MediaSearchStatusLabel.Text = items.Count == 0
+                ? "No matching movies or episodes found."
+                : $"{items.Count} match{(items.Count == 1 ? "" : "es")} • choose one above.";
+        }
+        catch (Exception ex)
+        {
+            MediaPicker.ItemsSource = null;
+            MediaSearchStatusLabel.Text = ex.Message;
+        }
+        finally
+        {
+            _searchingMedia = false;
+            MediaSearchButton.IsEnabled = true;
+            UpdateSyncButtons();
+        }
     }
 
     private async void RealignClicked(object sender, EventArgs e)
@@ -61,7 +127,7 @@ public partial class SyncPage : ContentPage
         try
         {
             RealignButton.IsEnabled = false;
-            StatusLabel.Text = "Re-aligning participant playback…";
+            StatusLabel.Text = "Precision re-aligning playback…";
             await _sync.RealignNowAsync();
             StatusLabel.Text = _sync.Status;
         }
@@ -82,38 +148,114 @@ public partial class SyncPage : ContentPage
         RebuildParticipants();
     }
 
-    private async void StartClicked(object sender, EventArgs e)
-    {
-        if (HostPicker.SelectedItem is not SessionInfoDto host || string.IsNullOrWhiteSpace(host.Id))
-        {
-            await DisplayAlert("Sync'EM up", "Choose a currently playing host device first.", "OK");
-            return;
-        }
-
-        var participantIds = ParticipantsView.SelectedItems
+    private List<string> GetSelectedParticipantIds() =>
+        ParticipantsView.SelectedItems
             .OfType<SessionInfoDto>()
             .Select(s => s.Id)
             .Where(id => !string.IsNullOrWhiteSpace(id))
             .Select(id => id!)
             .ToList();
 
+    private async void StartFromBeginningClicked(object sender, EventArgs e)
+    {
+        if (HostPicker.SelectedItem is not SessionInfoDto host ||
+            string.IsNullOrWhiteSpace(host.Id))
+        {
+            await DisplayAlert(
+                "Sync'EM up",
+                "Choose a host device first.",
+                "OK");
+            return;
+        }
+
+        if (MediaPicker.SelectedItem is not BaseItemDto media ||
+            string.IsNullOrWhiteSpace(media.Id))
+        {
+            await DisplayAlert(
+                "Sync'EM up",
+                "Search for and choose a movie or episode first.",
+                "OK");
+            return;
+        }
+
+        var participantIds = GetSelectedParticipantIds();
         if (participantIds.Count == 0)
         {
-            await DisplayAlert("Sync'EM up", "Choose at least one participant device.", "OK");
+            await DisplayAlert(
+                "Sync'EM up",
+                "Choose at least one participant device.",
+                "OK");
+            return;
+        }
+
+        try
+        {
+            StartFromBeginningButton.IsEnabled = false;
+            StartButton.IsEnabled = false;
+            StatusLabel.Text = $"Starting {media.DisplayName} from the beginning…";
+            await _sync.StartFromBeginningAsync(host.Id, participantIds, media.Id);
+            StatusLabel.Text = _sync.Status;
+        }
+        catch (Exception ex)
+        {
+            StatusLabel.Text = ex.Message;
+            await DisplayAlert(
+                "Unable to start from beginning",
+                ex.Message,
+                "OK");
+        }
+        finally
+        {
+            UpdateSyncButtons();
+        }
+    }
+
+    private async void StartClicked(object sender, EventArgs e)
+    {
+        if (HostPicker.SelectedItem is not SessionInfoDto host ||
+            string.IsNullOrWhiteSpace(host.Id))
+        {
+            await DisplayAlert(
+                "Sync'EM up",
+                "Choose a host device first.",
+                "OK");
+            return;
+        }
+
+        if (!host.IsPlaying)
+        {
+            await DisplayAlert(
+                "Join Current Playback",
+                "The selected host is idle. Start media on the host first, or use Start from Beginning.",
+                "OK");
+            return;
+        }
+
+        var participantIds = GetSelectedParticipantIds();
+        if (participantIds.Count == 0)
+        {
+            await DisplayAlert(
+                "Sync'EM up",
+                "Choose at least one participant device.",
+                "OK");
             return;
         }
 
         try
         {
             StartButton.IsEnabled = false;
-            StatusLabel.Text = "Starting synchronized playback…";
+            StartFromBeginningButton.IsEnabled = false;
+            StatusLabel.Text = "Joining current playback…";
             await _sync.StartAsync(host.Id, participantIds);
             StatusLabel.Text = _sync.Status;
         }
         catch (Exception ex)
         {
             StatusLabel.Text = ex.Message;
-            await DisplayAlert("Unable to start Sync'EM up", ex.Message, "OK");
+            await DisplayAlert(
+                "Unable to join current playback",
+                ex.Message,
+                "OK");
         }
         finally
         {
@@ -130,11 +272,14 @@ public partial class SyncPage : ContentPage
 
     private async Task LoadSessionsAsync()
     {
-        if (_loading) return;
-        _loading = true;
+        if (_loading)
+            return;
 
+        _loading = true;
         var previousHostId = (HostPicker.SelectedItem as SessionInfoDto)?.Id;
-        StatusLabel.Text = _sync.IsRunning ? _sync.Status : "Looking for active Emby sessions…";
+        StatusLabel.Text = _sync.IsRunning
+            ? _sync.Status
+            : "Looking for Emby devices…";
 
         try
         {
@@ -143,7 +288,9 @@ public partial class SyncPage : ContentPage
             await Task.WhenAll(allSessionsTask, controllableSessionsTask);
 
             _allSessions = (await allSessionsTask)
-                .OrderBy(s => s.DeviceName)
+                .Where(s => !string.IsNullOrWhiteSpace(s.Id))
+                .OrderByDescending(s => s.IsPlaying)
+                .ThenBy(s => s.DeviceName)
                 .ThenBy(s => s.UserName)
                 .ToList();
 
@@ -157,14 +304,21 @@ public partial class SyncPage : ContentPage
                     !string.IsNullOrWhiteSpace(session.Id) &&
                     _controllableSessionIds.Contains(session.Id);
 
-            // The host only needs to expose playback state. It does not need to be
-            // remotely controllable because Sync'EM up never sends commands to it.
-            var hosts = _allSessions.Where(s => s.IsPlaying).ToList();
+            var hosts = _allSessions
+                .OrderByDescending(s =>
+                    s.IsControllableForSignedInUser || s.SupportsRemoteControl)
+                .ThenByDescending(s => s.IsPlaying)
+                .ThenBy(s => s.DeviceName)
+                .ToList();
 
             HostPicker.ItemsSource = hosts;
-            HostPicker.ItemDisplayBinding = new Binding(nameof(SessionInfoDto.SyncDisplay));
-            HostPicker.SelectedItem =
-                hosts.FirstOrDefault(s => string.Equals(s.Id, previousHostId, StringComparison.OrdinalIgnoreCase));
+            HostPicker.ItemDisplayBinding =
+                new Binding(nameof(SessionInfoDto.SyncDisplay));
+            HostPicker.SelectedItem = hosts.FirstOrDefault(s =>
+                string.Equals(
+                    s.Id,
+                    previousHostId,
+                    StringComparison.OrdinalIgnoreCase));
 
             if (HostPicker.SelectedItem is null && hosts.Count == 1)
                 HostPicker.SelectedItem = hosts[0];
@@ -176,14 +330,18 @@ public partial class SyncPage : ContentPage
             {
                 var hostId = (HostPicker.SelectedItem as SessionInfoDto)?.Id;
                 var participants = _allSessions
-                    .Where(s => !string.IsNullOrWhiteSpace(s.Id))
-                    .Where(s => !string.Equals(s.Id, hostId, StringComparison.OrdinalIgnoreCase))
+                    .Where(s => !string.Equals(
+                        s.Id,
+                        hostId,
+                        StringComparison.OrdinalIgnoreCase))
                     .ToList();
-                var reportedControllable = participants.Count(s => s.IsControllableForSignedInUser || s.SupportsRemoteControl);
+                var reportedControllable = participants.Count(s =>
+                    s.IsControllableForSignedInUser ||
+                    s.SupportsRemoteControl);
 
                 StatusLabel.Text = hosts.Count == 0
-                    ? $"No Emby session is currently playing • server sees {_allSessions.Count} session{(_allSessions.Count == 1 ? "" : "s")}."
-                    : $"Ready to Sync'EM up • {participants.Count} other session{(participants.Count == 1 ? "" : "s")} seen • {reportedControllable} reported controllable.";
+                    ? "No Emby device sessions are currently visible."
+                    : $"Ready to Sync'EM up • {hosts.Count} device session{(hosts.Count == 1 ? "" : "s")} seen • {reportedControllable} participant candidate{(reportedControllable == 1 ? "" : "s")} reported controllable.";
             }
         }
         catch (Exception ex)
@@ -204,9 +362,13 @@ public partial class SyncPage : ContentPage
         var hostId = (HostPicker.SelectedItem as SessionInfoDto)?.Id;
         ParticipantsView.SelectedItems.Clear();
         ParticipantsView.ItemsSource = _allSessions
-            .Where(s => !string.IsNullOrWhiteSpace(s.Id))
-            .Where(s => !string.Equals(s.Id, hostId, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(s => s.IsControllableForSignedInUser || s.SupportsRemoteControl)
+            .Where(s => !string.Equals(
+                s.Id,
+                hostId,
+                StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(s =>
+                s.IsControllableForSignedInUser ||
+                s.SupportsRemoteControl)
             .ThenByDescending(s => s.LastActivityDate)
             .ThenBy(s => s.DeviceName)
             .ToList();
@@ -215,7 +377,9 @@ public partial class SyncPage : ContentPage
     private void UpdateHostDetails()
     {
         if (HostPicker.SelectedItem is SessionInfoDto host)
-            HostMediaLabel.Text = $"Host media • {host.MediaDisplay} • {host.ProgressText}";
+            HostMediaLabel.Text = host.IsPlaying
+                ? $"Host media • {host.MediaDisplay} • {host.ProgressText}"
+                : "Host is idle • ready for Start from Beginning";
         else
             HostMediaLabel.Text = "No host selected";
     }
@@ -231,7 +395,9 @@ public partial class SyncPage : ContentPage
 
     private void UpdateSyncButtons()
     {
-        StartButton.IsEnabled = !_sync.IsRunning && !_loading;
+        var idle = !_sync.IsRunning && !_loading;
+        StartFromBeginningButton.IsEnabled = idle && !_searchingMedia;
+        StartButton.IsEnabled = idle;
         StopButton.IsEnabled = _sync.IsRunning;
         RealignButton.IsEnabled = _sync.IsRunning && !_loading;
     }

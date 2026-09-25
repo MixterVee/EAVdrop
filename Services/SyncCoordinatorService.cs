@@ -146,6 +146,139 @@ public sealed class SyncCoordinatorService
         }
     }
 
+    public async Task StartFromBeginningAsync(
+        string hostSessionId,
+        IEnumerable<string> participantSessionIds,
+        string itemId,
+        CancellationToken ct = default)
+    {
+        var participants = participantSessionIds
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Where(id => !string.Equals(id, hostSessionId, StringComparison.OrdinalIgnoreCase))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (string.IsNullOrWhiteSpace(hostSessionId))
+            throw new InvalidOperationException("Choose a host device first.");
+
+        if (participants.Count == 0)
+            throw new InvalidOperationException("Choose at least one participant device.");
+
+        if (string.IsNullOrWhiteSpace(itemId))
+            throw new InvalidOperationException("Choose a movie or episode first.");
+
+        Stop();
+        _hostSessionId = hostSessionId;
+        _participantSessionIds = participants;
+
+        await _precisionGate.WaitAsync(ct);
+        _precisionOperationInProgress = true;
+
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(40));
+
+            var sessions = await _api.GetSessionsAsync(timeout.Token);
+            var allTargetIds = new List<string> { hostSessionId };
+            allTargetIds.AddRange(participants);
+
+            var availableIds = allTargetIds
+                .Where(id => sessions.Any(s =>
+                    string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+
+            if (!availableIds.Contains(hostSessionId, StringComparer.OrdinalIgnoreCase))
+                throw new InvalidOperationException("The selected host session is no longer online.");
+
+            if (availableIds.Count < 2)
+                throw new InvalidOperationException("No selected participant session is currently available.");
+
+            SetStatus("Start from Beginning • opening media on all devices…");
+
+            var launchTasks = new List<Task>
+            {
+                _api.PlayOnSessionAsync(hostSessionId, itemId, 0, timeout.Token)
+            };
+            launchTasks.AddRange(
+                availableIds
+                    .Where(id => !string.Equals(id, hostSessionId, StringComparison.OrdinalIgnoreCase))
+                    .Select(id => _api.PlayOnSessionAsync(
+                        id,
+                        itemId,
+                        ParticipantPlaybackLeadTicks,
+                        timeout.Token)));
+
+            await Task.WhenAll(launchTasks);
+
+            SetStatus("Start from Beginning • waiting for players to load…");
+            await WaitForItemOnSessionsAsync(availableIds, itemId, timeout.Token);
+
+            SetStatus("Start from Beginning • locking the starting frame…");
+            await Task.WhenAll(availableIds.Select(id =>
+                _api.SendPlayStateCommandAsync(id, "Pause", null, timeout.Token)));
+
+            await Task.Delay(CommandSettleDelay, timeout.Token);
+
+            // Re-assert exact starting positions after every player has loaded and
+            // stopped. This avoids using startup/load time as part of the sync.
+            var seekTasks = new List<Task>
+            {
+                _api.SendPlayStateCommandAsync(hostSessionId, "Seek", 0, timeout.Token)
+            };
+            seekTasks.AddRange(
+                availableIds
+                    .Where(id => !string.Equals(id, hostSessionId, StringComparison.OrdinalIgnoreCase))
+                    .Select(id => _api.SendPlayStateCommandAsync(
+                        id,
+                        "Seek",
+                        ParticipantPlaybackLeadTicks,
+                        timeout.Token)));
+
+            await Task.WhenAll(seekTasks);
+            await Task.Delay(CommandSettleDelay, timeout.Token);
+
+            await Task.WhenAll(availableIds.Select(id =>
+                _api.SendPlayStateCommandAsync(id, "Pause", null, timeout.Token)));
+
+            // Wait until the host reports the exact same paused position twice.
+            // We intentionally ignore its value here: the explicit Seek(0) above
+            // defines our start anchor, while this confirms the player settled.
+            await WaitForStablePausedHostAsync(hostSessionId, itemId, timeout.Token);
+
+            SetStatus($"Start from Beginning • releasing together • {_settings.SyncParticipantLeadMilliseconds} ms lead…");
+
+            var resumeTasks = availableIds.Select(id =>
+                _api.SendPlayStateCommandAsync(id, "Unpause", null, timeout.Token));
+            await Task.WhenAll(resumeTasks);
+
+            await Task.Delay(CommandSettleDelay, timeout.Token);
+            var finalSessions = await _api.GetSessionsAsync(timeout.Token);
+            var finalHost = finalSessions.FirstOrDefault(s =>
+                string.Equals(s.Id, hostSessionId, StringComparison.OrdinalIgnoreCase));
+
+            if (finalHost is not null)
+                RememberHostState(finalHost);
+            else
+                ResetSyncState();
+
+            _syncCts = new CancellationTokenSource();
+            SetStatus($"Sync'EM up active • started from beginning • {_settings.SyncParticipantLeadMilliseconds} ms lead");
+            _ = RunLoopAsync(_syncCts.Token);
+        }
+        catch
+        {
+            _hostSessionId = "";
+            _participantSessionIds.Clear();
+            ResetSyncState();
+            throw;
+        }
+        finally
+        {
+            _precisionOperationInProgress = false;
+            _precisionGate.Release();
+        }
+    }
+
     public async Task StartAsync(
         string hostSessionId,
         IEnumerable<string> participantSessionIds,
@@ -396,6 +529,35 @@ public sealed class SyncCoordinatorService
                 await _api.SendPlayStateCommandAsync(participantId, "Unpause", null, ct);
             }
         }
+    }
+
+    private async Task<IReadOnlyCollection<SessionInfoDto>> WaitForItemOnSessionsAsync(
+        IReadOnlyCollection<string> sessionIds,
+        string itemId,
+        CancellationToken ct)
+    {
+        const int maxPolls = 40;
+
+        for (var attempt = 0; attempt < maxPolls; attempt++)
+        {
+            await Task.Delay(AnchorPollDelay, ct);
+            var sessions = await _api.GetSessionsAsync(ct);
+
+            var allLoaded = sessionIds.All(id =>
+            {
+                var session = sessions.FirstOrDefault(s =>
+                    string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase));
+
+                return session is not null &&
+                    string.Equals(session.NowPlayingItem?.Id, itemId, StringComparison.OrdinalIgnoreCase);
+            });
+
+            if (allLoaded)
+                return sessions;
+        }
+
+        throw new InvalidOperationException(
+            "One or more devices did not load the selected media in time.");
     }
 
     private async Task<(SessionInfoDto Host, IReadOnlyCollection<SessionInfoDto> Sessions)>
