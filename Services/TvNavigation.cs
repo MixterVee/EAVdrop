@@ -38,6 +38,8 @@ public static class TvNavigation
             Padding = new Thickness(8, 6)
         };
 
+        var buttons = new List<Button>();
+
         for (var i = 0; i < Items.Length; i++)
         {
             navGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
@@ -83,9 +85,45 @@ public static class TvNavigation
                     await Shell.Current.GoToAsync($"//{item.Route}");
             };
 
+            var buttonIndex = i;
+            button.HandlerChanged += (_, _) =>
+            {
+#if ANDROID
+                if (button.Handler?.PlatformView is Android.Views.View nativeButton)
+                {
+                    nativeButton.NextFocusLeftId = buttonIndex > 0
+                        ? buttons[buttonIndex - 1].Handler?.PlatformView is Android.Views.View left
+                            ? left.Id
+                            : Android.Views.View.NoId
+                        : Android.Views.View.NoId;
+                }
+#endif
+            };
+
             Grid.SetColumn(button, i);
             navGrid.Children.Add(button);
+            buttons.Add(button);
         }
+
+#if ANDROID
+        navGrid.Loaded += (_, _) =>
+        {
+            for (var i = 0; i < buttons.Count; i++)
+            {
+                if (buttons[i].Handler?.PlatformView is not Android.Views.View nativeButton)
+                    continue;
+
+                nativeButton.Focusable = true;
+                nativeButton.FocusableInTouchMode = true;
+
+                if (i > 0 && buttons[i - 1].Handler?.PlatformView is Android.Views.View left)
+                    nativeButton.NextFocusLeftId = left.Id;
+
+                if (i < buttons.Count - 1 && buttons[i + 1].Handler?.PlatformView is Android.Views.View right)
+                    nativeButton.NextFocusRightId = right.Id;
+            }
+        };
+#endif
 
         var navBorder = new Border
         {
