@@ -7,7 +7,11 @@
     FlyoutBehavior="Disabled"
     Shell.BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#111827}"
     Shell.ForegroundColor="{AppThemeBinding Light=#111827, Dark=#F9FAFB}"
-    Shell.TitleColor="{AppThemeBinding Light=#111827, Dark=#F9FAFB}">
+    Shell.TitleColor="{AppThemeBinding Light=#111827, Dark=#F9FAFB}"
+    Shell.TabBarBackgroundColor="{AppThemeBinding Light=#F3F4F6, Dark=#0F172A}"
+    Shell.TabBarForegroundColor="{StaticResource EavAccent}"
+    Shell.TabBarTitleColor="{StaticResource EavAccent}"
+    Shell.TabBarUnselectedColor="{AppThemeBinding Light=#64748B, Dark=#94A3B8}">
 
     <TabBar>
         <ShellContent Title="Dashboard" Route="dashboard" ContentTemplate="{DataTemplate pages:DashboardPage}" />
