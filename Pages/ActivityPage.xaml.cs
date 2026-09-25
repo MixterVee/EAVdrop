@@ -27,6 +27,7 @@ public partial class ActivityPage : ContentPage
         _api = MauiProgram.Services.GetRequiredService<EmbyApiClient>();
         _settings = MauiProgram.Services.GetRequiredService<SettingsService>();
         UpdateQuickFilterButtons();
+        TvNavigation.Attach(this, "activity");
     }
 
     protected override async void OnAppearing()
