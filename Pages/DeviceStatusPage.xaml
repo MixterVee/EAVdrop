@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="EAVdrop.Pages.DeviceStatusPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    Title="Devices">
+
+    <Grid Padding="18"
+          RowDefinitions="Auto,Auto,Auto,Auto,*"
+          RowSpacing="10">
+
+        <Grid ColumnDefinitions="*,Auto">
+            <VerticalStackLayout Spacing="2">
+                <Label Text="Devices"
+                       FontSize="28"
+                       FontAttributes="Bold" />
+                <Label Text="Live Emby client status"
+                       Style="{StaticResource MutedLabel}" />
+            </VerticalStackLayout>
+
+            <Button Grid.Column="1"
+                    Text="Refresh"
+                    Clicked="RefreshClicked"
+                    VerticalOptions="Center" />
+        </Grid>
+
+        <SearchBar Grid.Row="1"
+                   x:Name="SearchBox"
+                   Placeholder="Device, user, title or client"
+                   TextChanged="SearchChanged" />
+
+        <ScrollView Grid.Row="2"
+                    Orientation="Horizontal"
+                    HorizontalScrollBarVisibility="Never">
+            <HorizontalStackLayout Spacing="8">
+                <Button x:Name="AllFilterButton"
+                        Text="All"
+                        CommandParameter="All"
+                        Clicked="QuickFilterClicked"
+                        Padding="14,8"
+                        FontSize="13" />
+                <Button x:Name="PlayingFilterButton"
+                        Text="Playing"
+                        CommandParameter="Playing"
+                        Clicked="QuickFilterClicked"
+                        Padding="14,8"
+                        FontSize="13" />
+                <Button x:Name="IdleFilterButton"
+                        Text="Idle"
+                        CommandParameter="Idle"
+                        Clicked="QuickFilterClicked"
+                        Padding="14,8"
+                        FontSize="13" />
+                <Button x:Name="TranscodingFilterButton"
+                        Text="Transcoding"
+                        CommandParameter="Transcoding"
+                        Clicked="QuickFilterClicked"
+                        Padding="14,8"
+                        FontSize="13" />
+            </HorizontalStackLayout>
+        </ScrollView>
+
+        <VerticalStackLayout Grid.Row="3" Spacing="1">
+            <Label x:Name="StatusLabel"
+                   Style="{StaticResource MutedLabel}" />
+            <Label x:Name="LastUpdatedLabel"
+                   Text="Not refreshed yet"
+                   Style="{StaticResource MutedLabel}"
+                   FontSize="12" />
+        </VerticalStackLayout>
+
+        <CollectionView Grid.Row="4"
+                        x:Name="DevicesView"
+                        SelectionMode="None">
+            <CollectionView.EmptyView>
+                <Label x:Name="EmptyLabel"
+                       Text="No Emby device sessions are currently visible."
+                       Style="{StaticResource MutedLabel}"
+                       HorizontalOptions="Center"
+                       HorizontalTextAlignment="Center"
+                       Margin="0,40" />
+            </CollectionView.EmptyView>
+
+            <CollectionView.ItemTemplate>
+                <DataTemplate>
+                    <Border Style="{StaticResource MediaCardBorder}">
+                        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto"
+                              ColumnDefinitions="4,*,Auto"
+                              RowSpacing="5"
+                              ColumnSpacing="10">
+
+                            <BoxView Grid.RowSpan="5"
+                                     BackgroundColor="{StaticResource EavAccent}" />
+
+                            <Label Grid.Column="1"
+                                   Text="{Binding StateLabel}"
+                                   Style="{StaticResource MediaEyebrowLabel}" />
+
+                            <Label Grid.Column="2"
+                                   Text="{Binding Client}"
+                                   Style="{StaticResource MediaMetaLabel}"
+                                   VerticalTextAlignment="Center" />
+
+                            <Label Grid.Row="1"
+                                   Grid.Column="1"
+                                   Grid.ColumnSpan="2"
+                                   Text="{Binding MainTitle}"
+                                   Style="{StaticResource MediaTitleLabel}" />
+
+                            <Label Grid.Row="2"
+                                   Grid.Column="1"
+                                   Grid.ColumnSpan="2"
+                                   Text="{Binding PrimaryDetail}"
+                                   Style="{StaticResource MediaMetaLabel}" />
+
+                            <Label Grid.Row="3"
+                                   Grid.Column="1"
+                                   Grid.ColumnSpan="2"
+                                   Text="{Binding SecondaryDetail}"
+                                   Style="{StaticResource MediaMetaLabel}" />
+
+                            <VerticalStackLayout Grid.Row="4"
+                                                 Grid.Column="1"
+                                                 Grid.ColumnSpan="2"
+                                                 Spacing="5">
+                                <Label Text="{Binding ConnectionDetail}"
+                                       Style="{StaticResource MediaMetaLabel}" />
+                                <ProgressBar Progress="{Binding Progress}"
+                                             IsVisible="{Binding ShowProgress}"
+                                             HeightRequest="5" />
+                            </VerticalStackLayout>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</ContentPage>

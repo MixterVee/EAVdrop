@@ -7,7 +7,7 @@ namespace EAVdrop.Services;
 
 public sealed class EmbyApiClient
 {
-    private const string AppVersion = "0.4.20";
+    private const string AppVersion = "0.4.21";
 
     private readonly SettingsService _settings;
     private readonly HttpClient _http = new();
