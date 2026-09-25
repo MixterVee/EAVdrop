@@ -17,6 +17,7 @@ public partial class SettingsPage : ContentPage
         HistoryRangePicker.ItemsSource = Enum.GetValues<PlaybackHistoryRange>()
             .Select(SettingsService.GetHistoryRangeSettingLabel)
             .ToList();
+        TvNavigation.Attach(this, "settings");
     }
 
     protected override async void OnAppearing()
