@@ -31,6 +31,7 @@ public sealed class SettingsService
     private const string SyncParticipantLeadMsKey = "sync_participant_lead_ms";
     private const string SyncLastHostIdentityKey = "sync_last_host_identity";
     private const string SyncLastParticipantIdentitiesKey = "sync_last_participant_identities";
+    private const string FavoriteUserIdsKey = "favorite_user_ids";
 
     public string LocalUrl
     {
@@ -151,6 +152,61 @@ public sealed class SettingsService
                 SyncLastParticipantIdentitiesKey,
                 JsonSerializer.Serialize(clean));
         }
+    }
+
+    public IReadOnlyList<string> FavoriteUserIds
+    {
+        get
+        {
+            var raw = Preferences.Default.Get(FavoriteUserIdsKey, "");
+            if (string.IsNullOrWhiteSpace(raw))
+                return [];
+
+            try
+            {
+                return JsonSerializer.Deserialize<List<string>>(raw) ?? [];
+            }
+            catch
+            {
+                return [];
+            }
+        }
+        set
+        {
+            var clean = (value ?? [])
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            Preferences.Default.Set(
+                FavoriteUserIdsKey,
+                JsonSerializer.Serialize(clean));
+        }
+    }
+
+    public bool IsFavoriteUser(string userId) =>
+        !string.IsNullOrWhiteSpace(userId) &&
+        FavoriteUserIds.Contains(userId, StringComparer.OrdinalIgnoreCase);
+
+    public bool ToggleFavoriteUser(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return false;
+
+        var ids = FavoriteUserIds.ToList();
+        var existing = ids.FindIndex(x =>
+            string.Equals(x, userId, StringComparison.OrdinalIgnoreCase));
+
+        if (existing >= 0)
+        {
+            ids.RemoveAt(existing);
+            FavoriteUserIds = ids;
+            return false;
+        }
+
+        ids.Add(userId);
+        FavoriteUserIds = ids;
+        return true;
     }
 
     public async Task<string> GetAccessTokenAsync()

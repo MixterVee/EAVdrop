@@ -17,6 +17,9 @@ public sealed class UserPlaybackSummary
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";
 
+    public bool IsFavorite { get; set; }
+    public string FavoriteGlyph => IsFavorite ? "★" : "☆";
+
     public bool IsNowPlaying { get; set; }
     public string NowPlayingTitle { get; set; } = "";
     public string NowPlayingDetail { get; set; } = "";

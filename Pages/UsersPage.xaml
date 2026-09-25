@@ -5,7 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     Title="Users">
 
-    <Grid Padding="18" RowDefinitions="Auto,Auto,*" RowSpacing="10">
+    <Grid Padding="18" RowDefinitions="Auto,Auto,Auto,*" RowSpacing="10">
         <Grid ColumnDefinitions="*,Auto">
             <VerticalStackLayout Spacing="2">
                 <Label Text="Users" FontSize="28" FontAttributes="Bold" />
@@ -19,18 +19,31 @@
                     VerticalOptions="Center" />
         </Grid>
 
-        <Label Grid.Row="1"
+        <HorizontalStackLayout Grid.Row="1" Spacing="8">
+            <Button x:Name="FavoritesOnlyButton"
+                    Text="☆ Favorites only"
+                    Clicked="FavoritesOnlyClicked"
+                    Padding="14,8"
+                    FontSize="13" />
+            <Label Text="Tap ☆ beside a user to pin them to the top."
+                   Style="{StaticResource MutedLabel}"
+                   VerticalTextAlignment="Center" />
+        </HorizontalStackLayout>
+
+        <Label Grid.Row="2"
                x:Name="StatusLabel"
                Style="{StaticResource MutedLabel}" />
 
-        <CollectionView Grid.Row="2"
+        <CollectionView Grid.Row="3"
                         x:Name="UsersView"
                         SelectionMode="Single"
                         SelectionChanged="UserSelected">
             <CollectionView.EmptyView>
-                <Label Text="No Emby users to show."
+                <Label x:Name="EmptyLabel"
+                       Text="No Emby users to show."
                        Style="{StaticResource MutedLabel}"
                        HorizontalOptions="Center"
+                       HorizontalTextAlignment="Center"
                        Margin="0,40" />
             </CollectionView.EmptyView>
 
@@ -38,22 +51,33 @@
                 <DataTemplate>
                     <Border Style="{StaticResource CardBorder}">
                         <Grid RowDefinitions="Auto,Auto,Auto,Auto"
-                              ColumnDefinitions="*,Auto"
+                              ColumnDefinitions="*,Auto,Auto"
                               RowSpacing="7"
-                              ColumnSpacing="10">
+                              ColumnSpacing="8">
 
                             <Label Text="{Binding Name}"
                                    FontSize="20"
-                                   FontAttributes="Bold" />
+                                   FontAttributes="Bold"
+                                   VerticalTextAlignment="Center" />
 
-                            <Label Grid.Column="1"
+                            <Button Grid.Column="1"
+                                    Text="{Binding FavoriteGlyph}"
+                                    CommandParameter="{Binding .}"
+                                    Clicked="FavoriteClicked"
+                                    FontSize="20"
+                                    Padding="0"
+                                    WidthRequest="42"
+                                    HeightRequest="38"
+                                    ToolTipProperties.Text="Add or remove favorite" />
+
+                            <Label Grid.Column="2"
                                    Text="View ›"
                                    TextColor="{StaticResource EavAccent}"
                                    FontAttributes="Bold"
                                    VerticalTextAlignment="Center" />
 
                             <Border Grid.Row="1"
-                                    Grid.ColumnSpan="2"
+                                    Grid.ColumnSpan="3"
                                     Style="{StaticResource MediaCardBorder}"
                                     IsVisible="{Binding IsNowPlaying}"
                                     Margin="0,2,0,2">
@@ -82,7 +106,7 @@
                             </Border>
 
                             <VerticalStackLayout Grid.Row="2"
-                                                 Grid.ColumnSpan="2"
+                                                 Grid.ColumnSpan="3"
                                                  Spacing="3">
                                 <Label Text="{Binding RecentHeading}"
                                        FontAttributes="Bold"
@@ -102,7 +126,7 @@
                             </VerticalStackLayout>
 
                             <Label Grid.Row="3"
-                                   Grid.ColumnSpan="2"
+                                   Grid.ColumnSpan="3"
                                    Text="{Binding ActivityCountText}"
                                    Style="{StaticResource MutedLabel}" />
                         </Grid>

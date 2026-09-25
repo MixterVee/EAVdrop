@@ -8,6 +8,9 @@ public partial class UsersPage : ContentPage
 {
     private readonly EmbyApiClient _api;
     private readonly SettingsService _settings;
+
+    private List<UserPlaybackSummary> _summaries = [];
+    private bool _favoritesOnly;
     private bool _loading;
     private bool _hasLoaded;
     private string _loadedContextKey = "";
@@ -17,6 +20,7 @@ public partial class UsersPage : ContentPage
         InitializeComponent();
         _api = MauiProgram.Services.GetRequiredService<EmbyApiClient>();
         _settings = MauiProgram.Services.GetRequiredService<SettingsService>();
+        UpdateFavoritesButton();
     }
 
     protected override async void OnAppearing()
@@ -27,6 +31,23 @@ public partial class UsersPage : ContentPage
 
     private async void RefreshClicked(object sender, EventArgs e) =>
         await LoadAsync(force: true);
+
+    private void FavoritesOnlyClicked(object sender, EventArgs e)
+    {
+        _favoritesOnly = !_favoritesOnly;
+        UpdateFavoritesButton();
+        ApplyVisibleUsers();
+    }
+
+    private void FavoriteClicked(object sender, EventArgs e)
+    {
+        if (sender is not Button button ||
+            button.CommandParameter is not UserPlaybackSummary user)
+            return;
+
+        user.IsFavorite = _settings.ToggleFavoriteUser(user.Id);
+        ApplyVisibleUsers();
+    }
 
     private async Task LoadAsync(bool force)
     {
@@ -41,6 +62,9 @@ public partial class UsersPage : ContentPage
         {
             RangeCaptionLabel.Text =
                 $"Playback overview — {_settings.HistoryRangeCaption}";
+
+            RefreshFavoriteFlags();
+            ApplyVisibleUsers();
             return;
         }
 
@@ -66,6 +90,8 @@ public partial class UsersPage : ContentPage
 
             var sessions = await sessionsTask;
             var cutoff = _settings.GetPlaybackHistoryCutoff();
+            var favorites = _settings.FavoriteUserIds
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             var summaryTasks = users.Select(async user =>
             {
@@ -104,6 +130,7 @@ public partial class UsersPage : ContentPage
                 {
                     Id = user.Id,
                     Name = user.Name,
+                    IsFavorite = favorites.Contains(user.Id),
                     IsNowPlaying = playing is not null,
                     NowPlayingTitle = playing?.MediaDisplay ?? "",
                     NowPlayingDetail = playing is null
@@ -121,25 +148,19 @@ public partial class UsersPage : ContentPage
                 };
             });
 
-            var summaries = (await Task.WhenAll(summaryTasks))
-                .OrderByDescending(u => u.IsNowPlaying)
-                .ThenBy(u => u.Name)
-                .ToList();
-
-            UsersView.ItemsSource = summaries;
-
-            var activeCount = summaries.Count(u => u.IsNowPlaying);
-            StatusLabel.Text = activeCount > 0
-                ? $"{summaries.Count} Emby user{(summaries.Count == 1 ? "" : "s")} • {activeCount} playing now"
-                : $"{summaries.Count} Emby user{(summaries.Count == 1 ? "" : "s")}";
+            _summaries = (await Task.WhenAll(summaryTasks)).ToList();
 
             _loadedContextKey = contextKey;
             _hasLoaded = true;
+            ApplyVisibleUsers();
         }
         catch (Exception ex)
         {
             if (!keepExistingOnFailure)
+            {
+                _summaries = [];
                 UsersView.ItemsSource = null;
+            }
 
             StatusLabel.Text = ex.Message;
         }
@@ -147,6 +168,63 @@ public partial class UsersPage : ContentPage
         {
             _loading = false;
         }
+    }
+
+    private void RefreshFavoriteFlags()
+    {
+        var favorites = _settings.FavoriteUserIds
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var user in _summaries)
+            user.IsFavorite = favorites.Contains(user.Id);
+    }
+
+    private void ApplyVisibleUsers()
+    {
+        IEnumerable<UserPlaybackSummary> query = _summaries;
+
+        if (_favoritesOnly)
+            query = query.Where(u => u.IsFavorite);
+
+        var visible = query
+            .OrderByDescending(u => u.IsFavorite)
+            .ThenByDescending(u => u.IsNowPlaying)
+            .ThenBy(u => u.Name)
+            .ToList();
+
+        UsersView.ItemsSource = visible;
+
+        var favoriteCount = _summaries.Count(u => u.IsFavorite);
+        var activeCount = _summaries.Count(u => u.IsNowPlaying);
+
+        if (_favoritesOnly)
+        {
+            StatusLabel.Text = activeCount > 0
+                ? $"Showing {visible.Count} favorite user{(visible.Count == 1 ? "" : "s")} • {activeCount} playing now"
+                : $"Showing {visible.Count} favorite user{(visible.Count == 1 ? "" : "s")}";
+
+            EmptyLabel.Text =
+                "No favorite users yet. Turn off Favorites only, then tap ☆ beside a user.";
+        }
+        else
+        {
+            StatusLabel.Text = activeCount > 0
+                ? $"{_summaries.Count} Emby user{(_summaries.Count == 1 ? "" : "s")} • {favoriteCount} favorite{(favoriteCount == 1 ? "" : "s")} • {activeCount} playing now"
+                : $"{_summaries.Count} Emby user{(_summaries.Count == 1 ? "" : "s")} • {favoriteCount} favorite{(favoriteCount == 1 ? "" : "s")}";
+
+            EmptyLabel.Text = "No Emby users to show.";
+        }
+    }
+
+    private void UpdateFavoritesButton()
+    {
+        FavoritesOnlyButton.Text =
+            _favoritesOnly
+                ? "★ Favorites only"
+                : "☆ Favorites only";
+
+        FavoritesOnlyButton.Opacity =
+            _favoritesOnly ? 1.0 : 0.7;
     }
 
     private string GetContextKey() =>
