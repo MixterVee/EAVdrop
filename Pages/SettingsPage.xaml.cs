@@ -46,7 +46,7 @@ public partial class SettingsPage : ContentPage
         _settings.ThemePreference = preference;
 
         if (Application.Current is not null)
-            Application.Current.UserAppTheme = SettingsService.ResolveAppTheme(preference);
+            SettingsService.ApplyAppearance(Application.Current, preference);
     }
 
     private async void SaveClicked(object sender, EventArgs e)
