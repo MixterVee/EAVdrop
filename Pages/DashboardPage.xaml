@@ -184,11 +184,18 @@
                            Style="{StaticResource MutedLabel}" />
                 </VerticalStackLayout>
 
-                <Button Grid.Column="1"
-                        Text="Clear"
-                        Clicked="ClearEventsClicked"
-                        VerticalOptions="Center"
-                        Padding="12,8" />
+                <HorizontalStackLayout Grid.Column="1"
+                                       Spacing="6"
+                                       VerticalOptions="Center">
+                    <Button x:Name="ShowAllEventsButton"
+                            Text="All"
+                            Clicked="ToggleEventsClicked"
+                            Padding="10,8"
+                            IsVisible="False" />
+                    <Button Text="Clear"
+                            Clicked="ClearEventsClicked"
+                            Padding="10,8" />
+                </HorizontalStackLayout>
             </Grid>
 
             <Label x:Name="EventsEmptyLabel"
