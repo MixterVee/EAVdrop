@@ -14,8 +14,16 @@ public partial class AppShell : Shell
         Loaded += async (_, _) =>
         {
             var settings = MauiProgram.Services.GetRequiredService<SettingsService>();
+            var eventMonitor = MauiProgram.Services.GetRequiredService<EventMonitorService>();
+
             if (!await settings.HasMinimumConfigurationAsync())
+            {
+                eventMonitor.Stop();
                 await GoToAsync("//settings");
+                return;
+            }
+
+            eventMonitor.Start();
         };
     }
 }
