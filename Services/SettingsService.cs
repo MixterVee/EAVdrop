@@ -65,6 +65,40 @@ public sealed class SettingsService
         _ => AppTheme.Unspecified
     };
 
+    public static void ApplyAppearance(Application app, AppThemePreference preference)
+    {
+        app.UserAppTheme = ResolveAppTheme(preference);
+
+        var dark = preference == AppThemePreference.Dark ||
+                   (preference == AppThemePreference.System &&
+                    app.RequestedTheme == AppTheme.Dark);
+
+        static Color C(string value) => Color.FromArgb(value);
+
+        app.Resources["EavPageBackground"] =
+            C(dark ? "#111827" : "#FFFFFF");
+        app.Resources["EavText"] =
+            C(dark ? "#F9FAFB" : "#111827");
+        app.Resources["EavMuted"] =
+            C(dark ? "#9CA3AF" : "#4B5563");
+        app.Resources["EavCardBackground"] =
+            C(dark ? "#1F2937" : "#F3F4F6");
+        app.Resources["EavMediaCardBackground"] =
+            C(dark ? "#172033" : "#F9FAFB");
+        app.Resources["EavCardStroke"] =
+            C(dark ? "#334155" : "#E5E7EB");
+        app.Resources["EavControlBackground"] =
+            C(dark ? "#111827" : "#FFFFFF");
+        app.Resources["EavPlaceholder"] =
+            C(dark ? "#9CA3AF" : "#6B7280");
+        app.Resources["EavShellBackground"] =
+            C(dark ? "#111827" : "#FFFFFF");
+        app.Resources["EavTabBarBackground"] =
+            C(dark ? "#0F172A" : "#F3F4F6");
+        app.Resources["EavTabUnselected"] =
+            C(dark ? "#94A3B8" : "#64748B");
+    }
+
     public string LocalUrl
     {
         get => Preferences.Default.Get(LocalUrlKey, "");
