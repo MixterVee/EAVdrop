@@ -75,28 +75,48 @@ public sealed class SettingsService
 
         static Color C(string value) => Color.FromArgb(value);
 
-        app.Resources["EavPageBackground"] =
-            C(dark ? "#111827" : "#FFFFFF");
-        app.Resources["EavText"] =
-            C(dark ? "#F9FAFB" : "#111827");
-        app.Resources["EavMuted"] =
-            C(dark ? "#9CA3AF" : "#4B5563");
-        app.Resources["EavCardBackground"] =
-            C(dark ? "#1F2937" : "#F3F4F6");
-        app.Resources["EavMediaCardBackground"] =
-            C(dark ? "#172033" : "#F9FAFB");
-        app.Resources["EavCardStroke"] =
-            C(dark ? "#334155" : "#E5E7EB");
-        app.Resources["EavControlBackground"] =
-            C(dark ? "#111827" : "#FFFFFF");
-        app.Resources["EavPlaceholder"] =
-            C(dark ? "#9CA3AF" : "#6B7280");
-        app.Resources["EavShellBackground"] =
-            C(dark ? "#111827" : "#FFFFFF");
-        app.Resources["EavTabBarBackground"] =
-            C(dark ? "#0F172A" : "#F3F4F6");
-        app.Resources["EavTabUnselected"] =
-            C(dark ? "#94A3B8" : "#64748B");
+        // The semantic colors live inside the merged Colors.xaml dictionary.
+        // Updating app.Resources directly merely shadows those keys and existing
+        // DynamicResource bindings may not repaint until the page is recreated.
+        // Mutate the dictionary that actually owns each key so every visible
+        // control receives the resource-change notification immediately.
+        static bool TrySetOwnedResource(
+            ResourceDictionary dictionary,
+            string key,
+            object value)
+        {
+            if (dictionary.ContainsKey(key))
+            {
+                dictionary[key] = value;
+                return true;
+            }
+
+            foreach (var merged in dictionary.MergedDictionaries)
+            {
+                if (TrySetOwnedResource(merged, key, value))
+                    return true;
+            }
+
+            return false;
+        }
+
+        void Set(string key, Color value)
+        {
+            if (!TrySetOwnedResource(app.Resources, key, value))
+                app.Resources[key] = value;
+        }
+
+        Set("EavPageBackground", C(dark ? "#111827" : "#FFFFFF"));
+        Set("EavText", C(dark ? "#F9FAFB" : "#111827"));
+        Set("EavMuted", C(dark ? "#9CA3AF" : "#4B5563"));
+        Set("EavCardBackground", C(dark ? "#1F2937" : "#F3F4F6"));
+        Set("EavMediaCardBackground", C(dark ? "#172033" : "#F9FAFB"));
+        Set("EavCardStroke", C(dark ? "#334155" : "#E5E7EB"));
+        Set("EavControlBackground", C(dark ? "#111827" : "#FFFFFF"));
+        Set("EavPlaceholder", C(dark ? "#9CA3AF" : "#6B7280"));
+        Set("EavShellBackground", C(dark ? "#111827" : "#FFFFFF"));
+        Set("EavTabBarBackground", C(dark ? "#0F172A" : "#F3F4F6"));
+        Set("EavTabUnselected", C(dark ? "#94A3B8" : "#64748B"));
     }
 
     public string LocalUrl
