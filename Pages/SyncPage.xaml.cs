@@ -279,7 +279,7 @@ public partial class SyncPage : ContentPage
         if (HostPicker.SelectedItem is not SessionInfoDto host ||
             string.IsNullOrWhiteSpace(host.Id))
         {
-            await DisplayAlert("Sync'EM up", "Choose a host device first.", "OK");
+            await DisplayAlert("Sync'EM", "Choose a host device first.", "OK");
             return;
         }
 
@@ -287,7 +287,7 @@ public partial class SyncPage : ContentPage
             string.IsNullOrWhiteSpace(media.Id))
         {
             await DisplayAlert(
-                "Sync'EM up",
+                "Sync'EM",
                 "Choose something from Continue Watching, Recently Played, or Search first.",
                 "OK");
             return;
@@ -296,7 +296,7 @@ public partial class SyncPage : ContentPage
         var participantIds = GetSelectedParticipantIds();
         if (participantIds.Count == 0)
         {
-            await DisplayAlert("Sync'EM up", "Choose at least one participant device.", "OK");
+            await DisplayAlert("Sync'EM", "Choose at least one participant device.", "OK");
             return;
         }
 
@@ -329,14 +329,14 @@ public partial class SyncPage : ContentPage
         if (HostPicker.SelectedItem is not SessionInfoDto host ||
             string.IsNullOrWhiteSpace(host.Id))
         {
-            await DisplayAlert("Sync'EM up", "Choose a host device first.", "OK");
+            await DisplayAlert("Sync'EM", "Choose a host device first.", "OK");
             return;
         }
 
         var participantIds = GetSelectedParticipantIds();
         if (participantIds.Count == 0)
         {
-            await DisplayAlert("Sync'EM up", "Choose at least one participant device.", "OK");
+            await DisplayAlert("Sync'EM", "Choose at least one participant device.", "OK");
             return;
         }
 
@@ -460,7 +460,7 @@ public partial class SyncPage : ContentPage
             if (!_sync.IsRunning)
                 StatusLabel.Text = hosts.Count == 0
                     ? "No Emby device sessions are currently visible."
-                    : $"Ready to Sync'EM up • {hosts.Count} device session{(hosts.Count == 1 ? "" : "s")} seen.";
+                    : $"Ready to Sync'EM • {hosts.Count} device session{(hosts.Count == 1 ? "" : "s")} seen.";
         }
         catch (Exception ex)
         {
