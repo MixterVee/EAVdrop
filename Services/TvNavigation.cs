@@ -109,6 +109,7 @@ public static class TvNavigation
                 if (nativeButton.Id == Android.Views.View.NoId)
                     nativeButton.Id = Android.Views.View.GenerateViewId();
 
+                nativeButton.Tag = new Java.Lang.String("EAVdropTvNav");
                 nativeButton.Focusable = true;
                 nativeButtons.Add(nativeButton);
             }
