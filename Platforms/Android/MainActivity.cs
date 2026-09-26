@@ -1,8 +1,6 @@
 using Android.App;
 using Android.Content;
 using Android.Content.PM;
-using Android.Views;
-using EAVdrop.Services;
 
 namespace EAVdrop;
 
@@ -17,16 +15,4 @@ namespace EAVdrop;
     Categories = new[] { Intent.CategoryLeanbackLauncher })]
 public class MainActivity : MauiAppCompatActivity
 {
-    public override bool DispatchKeyEvent(KeyEvent? e)
-    {
-        if (e is not null &&
-            e.Action == KeyEventActions.Down &&
-            e.RepeatCount == 0 &&
-            TvNavigation.TryHandleRemoteSelect(this, e.KeyCode))
-        {
-            return true;
-        }
-
-        return base.DispatchKeyEvent(e);
-    }
 }
