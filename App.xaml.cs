@@ -7,7 +7,8 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
-        UserAppTheme = SettingsService.ResolveAppTheme(
+        SettingsService.ApplyAppearance(
+            this,
             SettingsService.GetSavedThemePreference());
     }
 
