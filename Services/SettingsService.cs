@@ -17,6 +17,13 @@ public enum PlaybackHistoryRange
     Unlimited
 }
 
+public enum AppThemePreference
+{
+    System,
+    Light,
+    Dark
+}
+
 public sealed class SettingsService
 {
     private const string LocalUrlKey = "local_url";
@@ -32,6 +39,31 @@ public sealed class SettingsService
     private const string SyncLastHostIdentityKey = "sync_last_host_identity";
     private const string SyncLastParticipantIdentitiesKey = "sync_last_participant_identities";
     private const string FavoriteUserIdsKey = "favorite_user_ids";
+    private const string AppThemePreferenceKey = "app_theme_preference";
+
+    public AppThemePreference ThemePreference
+    {
+        get => GetSavedThemePreference();
+        set => Preferences.Default.Set(AppThemePreferenceKey, value.ToString());
+    }
+
+    public static AppThemePreference GetSavedThemePreference()
+    {
+        var raw = Preferences.Default.Get(
+            AppThemePreferenceKey,
+            AppThemePreference.System.ToString());
+
+        return Enum.TryParse<AppThemePreference>(raw, out var preference)
+            ? preference
+            : AppThemePreference.System;
+    }
+
+    public static AppTheme ResolveAppTheme(AppThemePreference preference) => preference switch
+    {
+        AppThemePreference.Light => AppTheme.Light,
+        AppThemePreference.Dark => AppTheme.Dark,
+        _ => AppTheme.Unspecified
+    };
 
     public string LocalUrl
     {
