@@ -28,6 +28,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<SettingsService>();
         builder.Services.AddSingleton<EmbyApiClient>();
         builder.Services.AddSingleton<SyncCoordinatorService>();
+        builder.Services.AddSingleton<EventMonitorService>();
 
         var app = builder.Build();
         Services = app.Services;
