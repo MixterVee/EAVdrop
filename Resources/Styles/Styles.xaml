@@ -4,19 +4,19 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
 
     <Style TargetType="ContentPage">
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#FFFFFF, Dark=#111827}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource EavPageBackground}" />
     </Style>
 
     <Style TargetType="Label">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light=#111827, Dark=#F9FAFB}" />
+        <Setter Property="TextColor" Value="{DynamicResource EavText}" />
     </Style>
 
     <Style x:Key="MutedLabel" TargetType="Label">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource EavMutedLight}, Dark={StaticResource EavMutedDark}}" />
+        <Setter Property="TextColor" Value="{DynamicResource EavMuted}" />
     </Style>
 
     <Style x:Key="CardBorder" TargetType="Border">
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource EavSurfaceLight}, Dark={StaticResource EavSurfaceDark}}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource EavCardBackground}" />
         <Setter Property="StrokeThickness" Value="0" />
         <Setter Property="Padding" Value="16" />
         <Setter Property="Margin" Value="0,0,0,10" />
@@ -28,8 +28,8 @@
     </Style>
 
     <Style x:Key="MediaCardBorder" TargetType="Border">
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#F9FAFB, Dark=#172033}" />
-        <Setter Property="Stroke" Value="{AppThemeBinding Light=#E5E7EB, Dark=#334155}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource EavMediaCardBackground}" />
+        <Setter Property="Stroke" Value="{DynamicResource EavCardStroke}" />
         <Setter Property="StrokeThickness" Value="1" />
         <Setter Property="Padding" Value="14" />
         <Setter Property="Margin" Value="0,0,0,10" />
@@ -55,7 +55,7 @@
     </Style>
 
     <Style x:Key="MediaMetaLabel" TargetType="Label">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource EavMutedLight}, Dark={StaticResource EavMutedDark}}" />
+        <Setter Property="TextColor" Value="{DynamicResource EavMuted}" />
         <Setter Property="FontSize" Value="12" />
         <Setter Property="LineBreakMode" Value="TailTruncation" />
     </Style>
@@ -86,9 +86,9 @@
     </Style>
 
     <Style TargetType="Entry">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light=#111827, Dark=#F9FAFB}" />
-        <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light=#6B7280, Dark=#9CA3AF}" />
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#FFFFFF, Dark=#111827}" />
+        <Setter Property="TextColor" Value="{DynamicResource EavText}" />
+        <Setter Property="PlaceholderColor" Value="{DynamicResource EavPlaceholder}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource EavControlBackground}" />
         <Setter Property="VisualStateManager.VisualStateGroups">
             <VisualStateGroupList>
                 <VisualStateGroup x:Name="CommonStates">
@@ -106,8 +106,8 @@
     </Style>
 
     <Style TargetType="Picker">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light=#111827, Dark=#F9FAFB}" />
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#FFFFFF, Dark=#111827}" />
+        <Setter Property="TextColor" Value="{DynamicResource EavText}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource EavControlBackground}" />
         <Setter Property="VisualStateManager.VisualStateGroups">
             <VisualStateGroupList>
                 <VisualStateGroup x:Name="CommonStates">
@@ -124,9 +124,9 @@
     </Style>
 
     <Style TargetType="SearchBar">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light=#111827, Dark=#F9FAFB}" />
-        <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light=#6B7280, Dark=#9CA3AF}" />
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=#FFFFFF, Dark=#111827}" />
+        <Setter Property="TextColor" Value="{DynamicResource EavText}" />
+        <Setter Property="PlaceholderColor" Value="{DynamicResource EavPlaceholder}" />
+        <Setter Property="BackgroundColor" Value="{DynamicResource EavControlBackground}" />
         <Setter Property="VisualStateManager.VisualStateGroups">
             <VisualStateGroupList>
                 <VisualStateGroup x:Name="CommonStates">
