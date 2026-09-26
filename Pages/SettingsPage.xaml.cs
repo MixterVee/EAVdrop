@@ -7,6 +7,7 @@ public partial class SettingsPage : ContentPage
 {
     private readonly SettingsService _settings;
     private readonly EmbyApiClient _api;
+    private readonly EventMonitorService _eventMonitor;
     private bool _suppressThemeChanged;
 
     public SettingsPage()
@@ -14,6 +15,7 @@ public partial class SettingsPage : ContentPage
         InitializeComponent();
         _settings = MauiProgram.Services.GetRequiredService<SettingsService>();
         _api = MauiProgram.Services.GetRequiredService<EmbyApiClient>();
+        _eventMonitor = MauiProgram.Services.GetRequiredService<EventMonitorService>();
         ModePicker.ItemsSource = Enum.GetNames<ConnectionMode>();
         ThemePicker.ItemsSource = new[] { "System default", "Light", "Dark" };
         HistoryRangePicker.ItemsSource = Enum.GetValues<PlaybackHistoryRange>()
@@ -102,6 +104,7 @@ public partial class SettingsPage : ContentPage
             UsernameEntry.Text = result.User?.Name ?? UsernameEntry.Text;
             AccountStatusLabel.Text = $"Signed in successfully using {_api.LastConnectedBaseUrl}";
             StatusLabel.Text = "Emby sign-in successful.";
+            _eventMonitor.Start();
             await RefreshSignedInStatusAsync();
             await DisplayAlert("Emby sign-in", $"Signed in as {UsernameEntry.Text}.", "OK");
         }
@@ -127,6 +130,7 @@ public partial class SettingsPage : ContentPage
 
         try
         {
+            _eventMonitor.Stop();
             await _api.LogoutAsync();
             UsernameEntry.Text = "";
             PasswordEntry.Text = "";
