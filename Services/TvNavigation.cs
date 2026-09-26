@@ -2,6 +2,43 @@ namespace EAVdrop.Services;
 
 public static class TvNavigation
 {
+#if ANDROID
+    private static readonly Dictionary<int, string> NativeRoutes = new();
+
+    public static bool TryHandleRemoteSelect(Android.App.Activity activity, Android.Views.Keycode keyCode)
+    {
+        if (keyCode != Android.Views.Keycode.DpadCenter &&
+            keyCode != Android.Views.Keycode.Enter &&
+            keyCode != Android.Views.Keycode.NumpadEnter &&
+            keyCode != Android.Views.Keycode.ButtonA)
+            return false;
+
+        Android.Views.View? current = activity.CurrentFocus;
+        string? route = null;
+
+        // Usually CurrentFocus is the MaterialButton itself, but walk up the
+        // native view tree too in case Android reports a focused child view.
+        while (current is not null)
+        {
+            if (NativeRoutes.TryGetValue(current.Id, out route))
+                break;
+
+            current = current.Parent as Android.Views.View;
+        }
+
+        if (string.IsNullOrWhiteSpace(route))
+            return false;
+
+        var targetRoute = route;
+        MainThread.BeginInvokeOnMainThread(async () =>
+        {
+            await Shell.Current.GoToAsync($"//{targetRoute}");
+        });
+
+        return true;
+    }
+#endif
+
     private static readonly (string Title, string Route)[] Items =
     [
         ("Dashboard", "dashboard"),
@@ -109,6 +146,7 @@ public static class TvNavigation
         navGrid.Loaded += (_, _) =>
         {
             var nativeButtons = new List<Android.Views.View>();
+            NativeRoutes.Clear();
 
             // MAUI-created Android views commonly have View.NoId. Android's
             // nextFocus* APIs require real view IDs, so assign stable runtime IDs
@@ -129,6 +167,7 @@ public static class TvNavigation
             {
                 var nativeButton = nativeButtons[i];
                 var buttonIndex = i;
+                NativeRoutes[nativeButton.Id] = Items[i].Route;
 
                 // Explicit horizontal focus loop for Android TV remotes.
                 nativeButton.NextFocusLeftId =
