@@ -14,6 +14,7 @@ public partial class SettingsPage : ContentPage
         _settings = MauiProgram.Services.GetRequiredService<SettingsService>();
         _api = MauiProgram.Services.GetRequiredService<EmbyApiClient>();
         ModePicker.ItemsSource = Enum.GetNames<ConnectionMode>();
+        ThemePicker.ItemsSource = new[] { "System default", "Light", "Dark" };
         HistoryRangePicker.ItemsSource = Enum.GetValues<PlaybackHistoryRange>()
             .Select(SettingsService.GetHistoryRangeSettingLabel)
             .ToList();
@@ -27,12 +28,25 @@ public partial class SettingsPage : ContentPage
         LocalUrlEntry.Text = _settings.LocalUrl;
         RemoteUrlEntry.Text = _settings.RemoteUrl;
         ModePicker.SelectedItem = _settings.Mode.ToString();
+        ThemePicker.SelectedIndex = (int)_settings.ThemePreference;
         HistoryRangePicker.SelectedIndex = (int)_settings.HistoryRange;
 
         UsernameEntry.Text = _settings.AuthenticatedUserName;
         PasswordEntry.Text = "";
         AccountStatusLabel.Text = "";
         await RefreshSignedInStatusAsync();
+    }
+
+    private void ThemeChanged(object sender, EventArgs e)
+    {
+        if (ThemePicker.SelectedIndex < 0)
+            return;
+
+        var preference = (AppThemePreference)ThemePicker.SelectedIndex;
+        _settings.ThemePreference = preference;
+
+        if (Application.Current is not null)
+            Application.Current.UserAppTheme = SettingsService.ResolveAppTheme(preference);
     }
 
     private async void SaveClicked(object sender, EventArgs e)
