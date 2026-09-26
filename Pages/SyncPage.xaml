@@ -5,7 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     Title="Sync'EM up">
 
-    <Grid Padding="18" RowDefinitions="Auto,*,Auto" RowSpacing="12">
+    <Grid Padding="18" RowDefinitions="Auto,*" RowSpacing="12">
         <Grid ColumnDefinitions="*,Auto">
             <VerticalStackLayout Spacing="2">
                 <Label Text="Sync'EM up" FontSize="28" FontAttributes="Bold" />
@@ -34,6 +34,8 @@
                             <Label Text="1. Host device" FontSize="19" FontAttributes="Bold" />
                             <Picker x:Name="HostPicker"
                                     Title="Choose host device"
+                                    MinimumHeightRequest="56"
+                                    HorizontalOptions="Fill"
                                     SelectedIndexChanged="HostChanged" />
                             <Label x:Name="HostMediaLabel"
                                    Text="No host selected"
@@ -115,58 +117,60 @@
                     </Border>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
+
+            <CollectionView.Footer>
+    <Border Style="{StaticResource CardBorder}">
+                <VerticalStackLayout Spacing="8">
+                    <Label x:Name="ReadyLabel"
+                           Text="Choose a host and participant."
+                           FontAttributes="Bold"
+                           LineBreakMode="WordWrap" />
+    
+                    <Label x:Name="StatusLabel"
+                           Text="Not syncing"
+                           Style="{StaticResource MutedLabel}"
+                           LineBreakMode="WordWrap" />
+    
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                        <Label Text="Lead"
+                               VerticalTextAlignment="Center"
+                               FontAttributes="Bold" />
+                        <Picker x:Name="ParticipantLeadPicker"
+                                Grid.Column="1"
+                                Title="Timing offset"
+                                SelectedIndexChanged="ParticipantLeadChanged"
+                                HorizontalOptions="Fill" />
+                        <Button x:Name="RealignButton"
+                                Grid.Column="2"
+                                Text="Precision Re-align"
+                                Clicked="RealignClicked"
+                                IsEnabled="False" />
+                    </Grid>
+    
+                    <Button x:Name="StartFromBeginningButton"
+                            Text="Start Together from Beginning"
+                            Clicked="StartFromBeginningClicked"
+                            FontAttributes="Bold"
+                            HorizontalOptions="Fill" />
+    
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                        <Button x:Name="StartButton"
+                                Text="Join Current Playback"
+                                Clicked="StartClicked"
+                                HorizontalOptions="Fill" />
+                        <Button x:Name="StopButton"
+                                Grid.Column="1"
+                                Text="Stop Sync"
+                                Clicked="StopClicked"
+                                IsEnabled="False"
+                                HorizontalOptions="Fill" />
+                    </Grid>
+    
+                    <Label Text="Preferred: start from the beginning. EAVdrop preloads both players, applies your saved lead, then releases them together."
+                           Style="{StaticResource MutedLabel}" />
+                </VerticalStackLayout>
+            </Border>
+            </CollectionView.Footer>
         </CollectionView>
-
-        <Border Grid.Row="2" Style="{StaticResource CardBorder}">
-            <VerticalStackLayout Spacing="8">
-                <Label x:Name="ReadyLabel"
-                       Text="Choose a host and participant."
-                       FontAttributes="Bold"
-                       LineBreakMode="WordWrap" />
-
-                <Label x:Name="StatusLabel"
-                       Text="Not syncing"
-                       Style="{StaticResource MutedLabel}"
-                       LineBreakMode="WordWrap" />
-
-                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
-                    <Label Text="Lead"
-                           VerticalTextAlignment="Center"
-                           FontAttributes="Bold" />
-                    <Picker x:Name="ParticipantLeadPicker"
-                            Grid.Column="1"
-                            Title="Timing offset"
-                            SelectedIndexChanged="ParticipantLeadChanged"
-                            HorizontalOptions="Fill" />
-                    <Button x:Name="RealignButton"
-                            Grid.Column="2"
-                            Text="Precision Re-align"
-                            Clicked="RealignClicked"
-                            IsEnabled="False" />
-                </Grid>
-
-                <Button x:Name="StartFromBeginningButton"
-                        Text="Start Together from Beginning"
-                        Clicked="StartFromBeginningClicked"
-                        FontAttributes="Bold"
-                        HorizontalOptions="Fill" />
-
-                <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
-                    <Button x:Name="StartButton"
-                            Text="Join Current Playback"
-                            Clicked="StartClicked"
-                            HorizontalOptions="Fill" />
-                    <Button x:Name="StopButton"
-                            Grid.Column="1"
-                            Text="Stop Sync"
-                            Clicked="StopClicked"
-                            IsEnabled="False"
-                            HorizontalOptions="Fill" />
-                </Grid>
-
-                <Label Text="Preferred: start from the beginning. EAVdrop preloads both players, applies your saved lead, then releases them together."
-                       Style="{StaticResource MutedLabel}" />
-            </VerticalStackLayout>
-        </Border>
     </Grid>
 </ContentPage>
