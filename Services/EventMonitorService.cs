@@ -304,6 +304,8 @@ public sealed class EventMonitorService
                 EavEventKind.Sync,
                 "Sync'EM stopped",
                 status);
+
+            running = false;
         }
 
         _lastSyncRunning = running;
