@@ -1,3 +1,5 @@
+using EAVdrop.Services;
+
 namespace EAVdrop;
 
 public partial class App : Application
@@ -5,6 +7,8 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
+        UserAppTheme = SettingsService.ResolveAppTheme(
+            SettingsService.GetSavedThemePreference());
     }
 
     protected override Window CreateWindow(IActivationState? activationState)
