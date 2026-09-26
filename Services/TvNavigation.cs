@@ -2,6 +2,37 @@ namespace EAVdrop.Services;
 
 public static class TvNavigation
 {
+#if ANDROID
+    private static WeakReference<Android.Views.View>? _activeTabButton;
+
+    public static bool IsNavigationFocused(Android.Views.View? view)
+    {
+        var current = view;
+
+        while (current is not null)
+        {
+            if (string.Equals(
+                    current.Tag?.ToString(),
+                    "EAVdropTvNav",
+                    StringComparison.Ordinal))
+                return true;
+
+            current = current.Parent as Android.Views.View;
+        }
+
+        return false;
+    }
+
+    public static bool FocusActiveTab()
+    {
+        if (_activeTabButton is null ||
+            !_activeTabButton.TryGetTarget(out var button))
+            return false;
+
+        return button.RequestFocus();
+    }
+#endif
+
     private static readonly (string Title, string Route)[] Items =
     [
         ("Dashboard", "dashboard"),
@@ -190,9 +221,14 @@ public static class TvNavigation
                 var button = buttons[index];
 
                 if (button.Handler?.PlatformView is Android.Views.View nativeButton)
+                {
+                    _activeTabButton = new WeakReference<Android.Views.View>(nativeButton);
                     nativeButton.RequestFocus();
+                }
                 else
+                {
                     button.Focus();
+                }
             });
         };
 #endif
