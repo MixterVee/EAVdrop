@@ -5,13 +5,13 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:pages="clr-namespace:EAVdrop.Pages"
     FlyoutBehavior="Disabled"
-    Shell.BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#111827}"
-    Shell.ForegroundColor="{AppThemeBinding Light=#111827, Dark=#F9FAFB}"
-    Shell.TitleColor="{AppThemeBinding Light=#111827, Dark=#F9FAFB}"
-    Shell.TabBarBackgroundColor="{AppThemeBinding Light=#F3F4F6, Dark=#0F172A}"
+    Shell.BackgroundColor="{DynamicResource EavShellBackground}"
+    Shell.ForegroundColor="{DynamicResource EavText}"
+    Shell.TitleColor="{DynamicResource EavText}"
+    Shell.TabBarBackgroundColor="{DynamicResource EavTabBarBackground}"
     Shell.TabBarForegroundColor="{StaticResource EavAccent}"
     Shell.TabBarTitleColor="{StaticResource EavAccent}"
-    Shell.TabBarUnselectedColor="{AppThemeBinding Light=#64748B, Dark=#94A3B8}">
+    Shell.TabBarUnselectedColor="{DynamicResource EavTabUnselected}">
 
     <TabBar>
         <ShellContent Title="Dashboard" Route="dashboard" ContentTemplate="{DataTemplate pages:DashboardPage}" />
