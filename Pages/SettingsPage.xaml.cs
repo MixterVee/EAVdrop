@@ -7,6 +7,7 @@ public partial class SettingsPage : ContentPage
 {
     private readonly SettingsService _settings;
     private readonly EmbyApiClient _api;
+    private bool _suppressThemeChanged;
 
     public SettingsPage()
     {
@@ -28,7 +29,11 @@ public partial class SettingsPage : ContentPage
         LocalUrlEntry.Text = _settings.LocalUrl;
         RemoteUrlEntry.Text = _settings.RemoteUrl;
         ModePicker.SelectedItem = _settings.Mode.ToString();
+
+        _suppressThemeChanged = true;
         ThemePicker.SelectedIndex = (int)_settings.ThemePreference;
+        _suppressThemeChanged = false;
+
         HistoryRangePicker.SelectedIndex = (int)_settings.HistoryRange;
 
         UsernameEntry.Text = _settings.AuthenticatedUserName;
@@ -37,16 +42,35 @@ public partial class SettingsPage : ContentPage
         await RefreshSignedInStatusAsync();
     }
 
-    private void ThemeChanged(object sender, EventArgs e)
+    private async void ThemeChanged(object sender, EventArgs e)
     {
-        if (ThemePicker.SelectedIndex < 0)
+        if (_suppressThemeChanged || ThemePicker.SelectedIndex < 0)
             return;
 
         var preference = (AppThemePreference)ThemePicker.SelectedIndex;
         _settings.ThemePreference = preference;
 
-        if (Application.Current is not null)
-            SettingsService.ApplyAppearance(Application.Current, preference);
+        // Preserve any other Settings edits before rebuilding the visual tree.
+        SaveSettings();
+
+        if (Application.Current is null)
+            return;
+
+        SettingsService.ApplyAppearance(Application.Current, preference);
+
+        // On Android TV, MAUI can keep the existing native visual tree painted
+        // with the old resources even after UserAppTheme/DynamicResource changes.
+        // Rebuild the Shell in-process so the newly selected theme is visible
+        // immediately, without requiring the user to exit and relaunch EAVdrop.
+        await Task.Delay(120);
+
+        var window = Application.Current.Windows.FirstOrDefault();
+        if (window is null)
+            return;
+
+        var shell = new AppShell();
+        window.Page = shell;
+        await shell.GoToAsync("//settings");
     }
 
     private async void SaveClicked(object sender, EventArgs e)
