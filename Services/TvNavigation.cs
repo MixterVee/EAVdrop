@@ -2,43 +2,6 @@ namespace EAVdrop.Services;
 
 public static class TvNavigation
 {
-#if ANDROID
-    private static readonly Dictionary<int, string> NativeRoutes = new();
-
-    public static bool TryHandleRemoteSelect(Android.App.Activity activity, Android.Views.Keycode keyCode)
-    {
-        if (keyCode != Android.Views.Keycode.DpadCenter &&
-            keyCode != Android.Views.Keycode.Enter &&
-            keyCode != Android.Views.Keycode.NumpadEnter &&
-            keyCode != Android.Views.Keycode.ButtonA)
-            return false;
-
-        Android.Views.View? current = activity.CurrentFocus;
-        string? route = null;
-
-        // Usually CurrentFocus is the MaterialButton itself, but walk up the
-        // native view tree too in case Android reports a focused child view.
-        while (current is not null)
-        {
-            if (NativeRoutes.TryGetValue(current.Id, out route))
-                break;
-
-            current = current.Parent as Android.Views.View;
-        }
-
-        if (string.IsNullOrWhiteSpace(route))
-            return false;
-
-        var targetRoute = route;
-        MainThread.BeginInvokeOnMainThread(async () =>
-        {
-            await Shell.Current.GoToAsync($"//{targetRoute}");
-        });
-
-        return true;
-    }
-#endif
-
     private static readonly (string Title, string Route)[] Items =
     [
         ("Dashboard", "dashboard"),
@@ -76,13 +39,18 @@ public static class TvNavigation
         };
 
         var buttons = new List<Button>();
+        var selectedIndex = -1;
 
         for (var i = 0; i < Items.Length; i++)
         {
             navGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
 
             var item = Items[i];
-            var selected = string.Equals(item.Route, currentRoute, StringComparison.OrdinalIgnoreCase);
+            var route = item.Route;
+            var selected = string.Equals(route, currentRoute, StringComparison.OrdinalIgnoreCase);
+            if (selected)
+                selectedIndex = i;
+
             var button = new Button
             {
                 Text = item.Title,
@@ -116,25 +84,11 @@ public static class TvNavigation
                 button.FontAttributes = selected ? FontAttributes.Bold : FontAttributes.None;
             };
 
+            // Keep normal MAUI click support for touch/mouse.
             button.Clicked += async (_, _) =>
             {
                 if (!selected)
-                    await Shell.Current.GoToAsync($"//{item.Route}");
-            };
-
-            var buttonIndex = i;
-            button.HandlerChanged += (_, _) =>
-            {
-#if ANDROID
-                if (button.Handler?.PlatformView is Android.Views.View nativeButton)
-                {
-                    nativeButton.NextFocusLeftId = buttonIndex > 0
-                        ? buttons[buttonIndex - 1].Handler?.PlatformView is Android.Views.View left
-                            ? left.Id
-                            : Android.Views.View.NoId
-                        : Android.Views.View.NoId;
-                }
-#endif
+                    await Shell.Current.GoToAsync($"//{route}");
             };
 
             Grid.SetColumn(button, i);
@@ -146,11 +100,7 @@ public static class TvNavigation
         navGrid.Loaded += (_, _) =>
         {
             var nativeButtons = new List<Android.Views.View>();
-            NativeRoutes.Clear();
 
-            // MAUI-created Android views commonly have View.NoId. Android's
-            // nextFocus* APIs require real view IDs, so assign stable runtime IDs
-            // before wiring the D-pad focus graph.
             foreach (var button in buttons)
             {
                 if (button.Handler?.PlatformView is not Android.Views.View nativeButton)
@@ -167,17 +117,16 @@ public static class TvNavigation
             {
                 var nativeButton = nativeButtons[i];
                 var buttonIndex = i;
-                NativeRoutes[nativeButton.Id] = Items[i].Route;
+                var route = Items[i].Route;
 
-                // Explicit horizontal focus loop for Android TV remotes.
                 nativeButton.NextFocusLeftId =
                     nativeButtons[(i - 1 + nativeButtons.Count) % nativeButtons.Count].Id;
                 nativeButton.NextFocusRightId =
                     nativeButtons[(i + 1) % nativeButtons.Count].Id;
 
-                // Do not rely only on Android's geometric focus search. MAUI's
-                // nested handler layout can make that inconsistent on TV, so
-                // consume LEFT/RIGHT ourselves and move focus directly.
+                // This handler is the important part for TV:
+                // LEFT/RIGHT and SELECT are all handled on the same focused
+                // native view. If LEFT/RIGHT reaches us, SELECT will too.
                 nativeButton.KeyPress += (_, e) =>
                 {
                     if (e.Event?.Action != Android.Views.KeyEventActions.Down ||
@@ -196,33 +145,54 @@ public static class TvNavigation
                         return;
                     }
 
+                    if (e.KeyCode == Android.Views.Keycode.DpadCenter ||
+                        e.KeyCode == Android.Views.Keycode.Enter ||
+                        e.KeyCode == Android.Views.Keycode.NumpadEnter ||
+                        e.KeyCode == Android.Views.Keycode.ButtonA ||
+                        e.KeyCode == Android.Views.Keycode.ButtonSelect)
+                    {
+                        if (!string.Equals(route, currentRoute, StringComparison.OrdinalIgnoreCase))
+                        {
+                            var targetRoute = route;
+                            MainThread.BeginInvokeOnMainThread(async () =>
+                                await Shell.Current.GoToAsync($"//{targetRoute}"));
+                        }
+
+                        e.Handled = true;
+                        return;
+                    }
+
                     if (e.KeyCode == Android.Views.Keycode.DpadUp)
                     {
-                        // Let the user leave the nav bar and reach the page controls.
                         var next = nativeButton.FocusSearch(Android.Views.FocusSearchDirection.Up);
                         if (next is not null && !nativeButtons.Contains(next))
                         {
                             next.RequestFocus();
                             e.Handled = true;
-                            return;
-                        }
-
-                        if (originalContent.Handler?.PlatformView is Android.Views.View pageRoot &&
-                            pageRoot.RequestFocus(Android.Views.FocusSearchDirection.Up))
-                        {
-                            e.Handled = true;
                         }
                     }
                 };
             }
+        };
 
-            // Put initial TV focus on the currently selected destination.
-            var selectedIndex = Array.FindIndex(
-                Items,
-                x => string.Equals(x.Route, currentRoute, StringComparison.OrdinalIgnoreCase));
+        // Hidden Shell pages can be created/loaded before they are visible.
+        // Do NOT request focus from Loaded. Request it only when this page
+        // actually becomes the active page, after Android has finished laying it out.
+        page.Appearing += (_, _) =>
+        {
+            var index = selectedIndex;
+            if (index < 0 || index >= buttons.Count)
+                return;
 
-            if (selectedIndex >= 0 && selectedIndex < nativeButtons.Count)
-                nativeButtons[selectedIndex].RequestFocus();
+            page.Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(200), () =>
+            {
+                var button = buttons[index];
+
+                if (button.Handler?.PlatformView is Android.Views.View nativeButton)
+                    nativeButton.RequestFocus();
+                else
+                    button.Focus();
+            });
         };
 #endif
 
