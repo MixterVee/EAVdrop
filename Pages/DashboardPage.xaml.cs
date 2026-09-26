@@ -12,6 +12,7 @@ public partial class DashboardPage : ContentPage
     private readonly EmbyApiClient _api;
     private readonly SettingsService _settings;
     private readonly SyncCoordinatorService _sync;
+    private readonly EventMonitorService _eventMonitor;
 
     private bool _loading;
     private CancellationTokenSource? _refreshCts;
@@ -24,8 +25,8 @@ public partial class DashboardPage : ContentPage
         _api = MauiProgram.Services.GetRequiredService<EmbyApiClient>();
         _settings = MauiProgram.Services.GetRequiredService<SettingsService>();
         _sync = MauiProgram.Services.GetRequiredService<SyncCoordinatorService>();
+        _eventMonitor = MauiProgram.Services.GetRequiredService<EventMonitorService>();
 
-        _sync.StatusChanged += SyncStatusChanged;
         TvNavigation.Attach(this, "dashboard");
     }
 
@@ -39,7 +40,13 @@ public partial class DashboardPage : ContentPage
         var refreshCts = new CancellationTokenSource();
         _refreshCts = refreshCts;
 
+        _sync.StatusChanged += SyncStatusChanged;
+        _eventMonitor.EventAdded += EventAdded;
+        _eventMonitor.EventsChanged += EventsChanged;
+        _eventMonitor.Start();
+
         UpdateSyncStatus();
+        RefreshEvents();
         await LoadAsync();
 
         // On a fresh install AppShell can redirect from Dashboard to Settings
@@ -58,6 +65,10 @@ public partial class DashboardPage : ContentPage
         _refreshCts?.Dispose();
         _refreshCts = null;
 
+        _sync.StatusChanged -= SyncStatusChanged;
+        _eventMonitor.EventAdded -= EventAdded;
+        _eventMonitor.EventsChanged -= EventsChanged;
+
         base.OnDisappearing();
     }
 
@@ -72,6 +83,21 @@ public partial class DashboardPage : ContentPage
 
     private async void OpenDevicesClicked(object sender, EventArgs e) =>
         await Shell.Current.GoToAsync("//devices");
+
+    private async void ClearEventsClicked(object sender, EventArgs e)
+    {
+        if (_eventMonitor.GetEvents(1).Count == 0)
+            return;
+
+        var clear = await DisplayAlert(
+            "Clear events?",
+            "Clear EAVdrop's saved event history on this device?",
+            "Clear",
+            "Cancel");
+
+        if (clear)
+            _eventMonitor.Clear();
+    }
 
     private async Task AutoRefreshAsync(CancellationToken ct)
     {
@@ -280,5 +306,32 @@ public partial class DashboardPage : ContentPage
     private void SyncStatusChanged(object? sender, string status)
     {
         MainThread.BeginInvokeOnMainThread(UpdateSyncStatus);
+    }
+
+    private void EventAdded(object? sender, EavEventItem item)
+    {
+        MainThread.BeginInvokeOnMainThread(RefreshEvents);
+    }
+
+    private void EventsChanged(object? sender, EventArgs e)
+    {
+        MainThread.BeginInvokeOnMainThread(RefreshEvents);
+    }
+
+    private void RefreshEvents()
+    {
+        var all = _eventMonitor.GetEvents();
+        var visible = all.Take(6).ToList();
+
+        BindableLayout.SetItemsSource(EventsStack, visible);
+        EventsEmptyLabel.IsVisible = visible.Count == 0;
+
+        EventsCaption.Text = all.Count switch
+        {
+            0 => "Watching playback, transcoding, users and Sync'EM",
+            1 => "1 saved event • live monitoring",
+            _ when all.Count <= 6 => $"{all.Count} saved events • live monitoring",
+            _ => $"Latest 6 of {all.Count} saved events • live monitoring"
+        };
     }
 }
