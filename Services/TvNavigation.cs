@@ -45,7 +45,14 @@ public static class TvNavigation
 
     public static void Attach(ContentPage page, string currentRoute)
     {
-        if (DeviceInfo.Current.Idiom != DeviceIdiom.TV || page.Content is null)
+        var idiom = DeviceInfo.Current.Idiom;
+        var isTv = idiom == DeviceIdiom.TV;
+        var isPhone = idiom == DeviceIdiom.Phone;
+
+        // Desktop keeps the native Shell tabs. Android TV gets D-pad-aware
+        // navigation and phones get a compact six-item touch bar so MAUI does
+        // not collapse the sixth tab into "More".
+        if ((!isTv && !isPhone) || page.Content is null)
             return;
 
         Shell.SetTabBarIsVisible(page, false);
@@ -65,8 +72,10 @@ public static class TvNavigation
 
         var navGrid = new Grid
         {
-            ColumnSpacing = 4,
-            Padding = new Thickness(8, 6)
+            ColumnSpacing = isTv ? 4 : 0,
+            Padding = isTv
+                ? new Thickness(8, 6)
+                : new Thickness(2, 4)
         };
 
         var buttons = new List<Button>();
@@ -78,44 +87,79 @@ public static class TvNavigation
 
             var item = Items[i];
             var route = item.Route;
-            var selected = string.Equals(route, currentRoute, StringComparison.OrdinalIgnoreCase);
+            var selected = string.Equals(
+                route,
+                currentRoute,
+                StringComparison.OrdinalIgnoreCase);
+
             if (selected)
                 selectedIndex = i;
 
             var button = new Button
             {
                 Text = item.Title,
-                FontSize = 14,
-                FontAttributes = selected ? FontAttributes.Bold : FontAttributes.None,
-                TextColor = selected ? Colors.White : Color.FromArgb("#CBD5E1"),
-                BackgroundColor = selected ? Color.FromArgb("#1E293B") : Colors.Transparent,
+                FontSize = isTv ? 14 : 10,
+                FontAttributes = selected
+                    ? FontAttributes.Bold
+                    : FontAttributes.None,
+                BackgroundColor = selected
+                    ? Color.FromArgb(isTv ? "#1E293B" : "#164E63")
+                    : Colors.Transparent,
                 BorderColor = Colors.Transparent,
                 BorderWidth = 0,
-                CornerRadius = 8,
-                Padding = new Thickness(4, 8),
-                MinimumHeightRequest = 44,
-                HorizontalOptions = LayoutOptions.Fill
+                CornerRadius = isTv ? 8 : 6,
+                Padding = isTv
+                    ? new Thickness(4, 8)
+                    : new Thickness(1, 6),
+                MinimumHeightRequest = isTv ? 44 : 46,
+                MinimumWidthRequest = 0,
+                HorizontalOptions = LayoutOptions.Fill,
+                LineBreakMode = LineBreakMode.NoWrap
             };
 
-            button.Focused += (_, _) =>
+            if (selected)
             {
-                button.BackgroundColor = Color.FromArgb("#22D3EE");
-                button.BorderColor = Colors.White;
-                button.BorderWidth = 2;
-                button.TextColor = Color.FromArgb("#0F172A");
-                button.FontAttributes = FontAttributes.Bold;
-            };
-
-            button.Unfocused += (_, _) =>
+                button.TextColor = Colors.White;
+            }
+            else
             {
-                button.BackgroundColor = selected ? Color.FromArgb("#1E293B") : Colors.Transparent;
-                button.BorderColor = Colors.Transparent;
-                button.BorderWidth = 0;
-                button.TextColor = selected ? Colors.White : Color.FromArgb("#CBD5E1");
-                button.FontAttributes = selected ? FontAttributes.Bold : FontAttributes.None;
-            };
+                button.SetDynamicResource(
+                    Button.TextColorProperty,
+                    "EavTabUnselected");
+            }
 
-            // Keep normal MAUI click support for touch/mouse.
+            if (isTv)
+            {
+                button.Focused += (_, _) =>
+                {
+                    button.BackgroundColor = Color.FromArgb("#22D3EE");
+                    button.BorderColor = Colors.White;
+                    button.BorderWidth = 2;
+                    button.TextColor = Color.FromArgb("#0F172A");
+                    button.FontAttributes = FontAttributes.Bold;
+                };
+
+                button.Unfocused += (_, _) =>
+                {
+                    button.BackgroundColor = selected
+                        ? Color.FromArgb("#1E293B")
+                        : Colors.Transparent;
+                    button.BorderColor = Colors.Transparent;
+                    button.BorderWidth = 0;
+
+                    if (selected)
+                        button.TextColor = Colors.White;
+                    else
+                        button.SetDynamicResource(
+                            Button.TextColorProperty,
+                            "EavTabUnselected");
+
+                    button.FontAttributes = selected
+                        ? FontAttributes.Bold
+                        : FontAttributes.None;
+                };
+            }
+
             button.Clicked += async (_, _) =>
             {
                 if (!selected)
@@ -128,120 +172,146 @@ public static class TvNavigation
         }
 
 #if ANDROID
-        navGrid.Loaded += (_, _) =>
+        if (isTv)
         {
-            var nativeButtons = new List<Android.Views.View>();
-
-            foreach (var button in buttons)
+            navGrid.Loaded += (_, _) =>
             {
-                if (button.Handler?.PlatformView is not Android.Views.View nativeButton)
-                    continue;
+                var nativeButtons = new List<Android.Views.View>();
 
-                if (nativeButton.Id == Android.Views.View.NoId)
-                    nativeButton.Id = Android.Views.View.GenerateViewId();
-
-                nativeButton.Tag = new Java.Lang.String("EAVdropTvNav");
-                nativeButton.Focusable = true;
-                nativeButtons.Add(nativeButton);
-            }
-
-            for (var i = 0; i < nativeButtons.Count; i++)
-            {
-                var nativeButton = nativeButtons[i];
-                var buttonIndex = i;
-                var route = Items[i].Route;
-
-                nativeButton.NextFocusLeftId =
-                    nativeButtons[(i - 1 + nativeButtons.Count) % nativeButtons.Count].Id;
-                nativeButton.NextFocusRightId =
-                    nativeButtons[(i + 1) % nativeButtons.Count].Id;
-
-                // This handler is the important part for TV:
-                // LEFT/RIGHT and SELECT are all handled on the same focused
-                // native view. If LEFT/RIGHT reaches us, SELECT will too.
-                nativeButton.KeyPress += (_, e) =>
+                foreach (var button in buttons)
                 {
-                    if (e.Event?.Action != Android.Views.KeyEventActions.Down ||
-                        e.Event.RepeatCount != 0)
-                        return;
+                    if (button.Handler?.PlatformView is not Android.Views.View nativeButton)
+                        continue;
 
-                    if (e.KeyCode == Android.Views.Keycode.DpadLeft ||
-                        e.KeyCode == Android.Views.Keycode.DpadRight)
+                    if (nativeButton.Id == Android.Views.View.NoId)
+                        nativeButton.Id = Android.Views.View.GenerateViewId();
+
+                    nativeButton.Tag = new Java.Lang.String("EAVdropTvNav");
+                    nativeButton.Focusable = true;
+                    nativeButtons.Add(nativeButton);
+                }
+
+                for (var i = 0; i < nativeButtons.Count; i++)
+                {
+                    var nativeButton = nativeButtons[i];
+                    var buttonIndex = i;
+                    var route = Items[i].Route;
+
+                    nativeButton.NextFocusLeftId =
+                        nativeButtons[(i - 1 + nativeButtons.Count) % nativeButtons.Count].Id;
+                    nativeButton.NextFocusRightId =
+                        nativeButtons[(i + 1) % nativeButtons.Count].Id;
+
+                    nativeButton.KeyPress += (_, e) =>
                     {
-                        var delta = e.KeyCode == Android.Views.Keycode.DpadLeft ? -1 : 1;
-                        var targetIndex =
-                            (buttonIndex + delta + nativeButtons.Count) % nativeButtons.Count;
+                        if (e.Event?.Action != Android.Views.KeyEventActions.Down ||
+                            e.Event.RepeatCount != 0)
+                            return;
 
-                        nativeButtons[targetIndex].RequestFocus();
-                        e.Handled = true;
-                        return;
-                    }
-
-                    if (e.KeyCode == Android.Views.Keycode.DpadCenter ||
-                        e.KeyCode == Android.Views.Keycode.Enter ||
-                        e.KeyCode == Android.Views.Keycode.NumpadEnter ||
-                        e.KeyCode == Android.Views.Keycode.ButtonA ||
-                        e.KeyCode == Android.Views.Keycode.ButtonSelect)
-                    {
-                        if (!string.Equals(route, currentRoute, StringComparison.OrdinalIgnoreCase))
+                        if (e.KeyCode == Android.Views.Keycode.DpadLeft ||
+                            e.KeyCode == Android.Views.Keycode.DpadRight)
                         {
-                            var targetRoute = route;
-                            MainThread.BeginInvokeOnMainThread(async () =>
-                                await Shell.Current.GoToAsync($"//{targetRoute}"));
-                        }
+                            var delta = e.KeyCode == Android.Views.Keycode.DpadLeft
+                                ? -1
+                                : 1;
+                            var targetIndex =
+                                (buttonIndex + delta + nativeButtons.Count) %
+                                nativeButtons.Count;
 
-                        e.Handled = true;
-                        return;
-                    }
-
-                    if (e.KeyCode == Android.Views.Keycode.DpadUp)
-                    {
-                        var next = nativeButton.FocusSearch(Android.Views.FocusSearchDirection.Up);
-                        if (next is not null && !nativeButtons.Contains(next))
-                        {
-                            next.RequestFocus();
+                            nativeButtons[targetIndex].RequestFocus();
                             e.Handled = true;
+                            return;
                         }
-                    }
-                };
-            }
-        };
 
-        // Hidden Shell pages can be created/loaded before they are visible.
-        // Do NOT request focus from Loaded. Request it only when this page
-        // actually becomes the active page, after Android has finished laying it out.
-        page.Appearing += (_, _) =>
-        {
-            var index = selectedIndex;
-            if (index < 0 || index >= buttons.Count)
-                return;
+                        if (e.KeyCode == Android.Views.Keycode.DpadCenter ||
+                            e.KeyCode == Android.Views.Keycode.Enter ||
+                            e.KeyCode == Android.Views.Keycode.NumpadEnter ||
+                            e.KeyCode == Android.Views.Keycode.ButtonA ||
+                            e.KeyCode == Android.Views.Keycode.ButtonSelect)
+                        {
+                            if (!string.Equals(
+                                    route,
+                                    currentRoute,
+                                    StringComparison.OrdinalIgnoreCase))
+                            {
+                                var targetRoute = route;
+                                MainThread.BeginInvokeOnMainThread(async () =>
+                                    await Shell.Current.GoToAsync($"//{targetRoute}"));
+                            }
 
-            page.Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(200), () =>
+                            e.Handled = true;
+                            return;
+                        }
+
+                        if (e.KeyCode == Android.Views.Keycode.DpadUp)
+                        {
+                            var next = nativeButton.FocusSearch(
+                                Android.Views.FocusSearchDirection.Up);
+
+                            if (next is not null &&
+                                !nativeButtons.Contains(next))
+                            {
+                                next.RequestFocus();
+                                e.Handled = true;
+                            }
+                        }
+                    };
+                }
+            };
+
+            // Hidden Shell pages can be created before they are visible.
+            // Give focus only when the actual page appears.
+            page.Appearing += (_, _) =>
             {
-                var button = buttons[index];
+                var index = selectedIndex;
+                if (index < 0 || index >= buttons.Count)
+                    return;
 
-                if (button.Handler?.PlatformView is Android.Views.View nativeButton)
-                {
-                    _activeTabButton = new WeakReference<Android.Views.View>(nativeButton);
-                    nativeButton.RequestFocus();
-                }
-                else
-                {
-                    button.Focus();
-                }
-            });
-        };
+                page.Dispatcher.DispatchDelayed(
+                    TimeSpan.FromMilliseconds(200),
+                    () =>
+                    {
+                        var button = buttons[index];
+
+                        if (button.Handler?.PlatformView is Android.Views.View nativeButton)
+                        {
+                            _activeTabButton =
+                                new WeakReference<Android.Views.View>(nativeButton);
+                            nativeButton.RequestFocus();
+                        }
+                        else
+                        {
+                            button.Focus();
+                        }
+                    });
+            };
+        }
 #endif
 
         var navBorder = new Border
         {
-            BackgroundColor = Color.FromArgb("#0F172A"),
-            Stroke = Color.FromArgb("#334155"),
             StrokeThickness = 1,
-            Margin = new Thickness(12, 0, 12, 12),
+            Margin = isTv
+                ? new Thickness(12, 0, 12, 12)
+                : new Thickness(0),
             Padding = 0,
             Content = navGrid
         };
+
+        if (isTv)
+        {
+            navBorder.BackgroundColor = Color.FromArgb("#0F172A");
+            navBorder.Stroke = Color.FromArgb("#334155");
+        }
+        else
+        {
+            navBorder.SetDynamicResource(
+                Border.BackgroundColorProperty,
+                "EavTabBarBackground");
+            navBorder.SetDynamicResource(
+                Border.StrokeProperty,
+                "EavCardStroke");
+        }
 
         Grid.SetRow(navBorder, 1);
         root.Children.Add(navBorder);
