@@ -3,12 +3,12 @@
     x:Class="EAVdrop.Pages.SyncPage"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-    Title="Sync'EM up">
+    Title="Sync'EM">
 
-    <Grid Padding="18" RowDefinitions="Auto,*" RowSpacing="12">
+    <Grid Padding="{OnIdiom Phone='12', Default='18'}" RowDefinitions="Auto,*" RowSpacing="{OnIdiom Phone=8, Default=12}">
         <Grid ColumnDefinitions="*,Auto">
             <VerticalStackLayout Spacing="2">
-                <Label Text="Sync'EM up" FontSize="28" FontAttributes="Bold" />
+                <Label Text="Sync'EM" FontSize="{OnIdiom Phone=26, Default=28}" FontAttributes="Bold" />
                 <Label Text="Pick devices, pick something to watch, and start together."
                        Style="{StaticResource MutedLabel}" />
             </VerticalStackLayout>
@@ -28,7 +28,7 @@
             </CollectionView.ItemsLayout>
 
             <CollectionView.Header>
-                <VerticalStackLayout Spacing="10">
+                <VerticalStackLayout Spacing="{OnIdiom Phone=8, Default=10}">
                     <Border Style="{StaticResource CardBorder}">
                         <VerticalStackLayout Spacing="8">
                             <Label Text="1. Host device" FontSize="19" FontAttributes="Bold" />
