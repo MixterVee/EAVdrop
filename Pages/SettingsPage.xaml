@@ -12,6 +12,16 @@
 
             <Border Style="{StaticResource CardBorder}">
                 <VerticalStackLayout Spacing="10">
+                    <Label Text="Appearance" FontSize="20" FontAttributes="Bold" />
+                    <Label Text="Choose how EAVdrop looks on this device." Style="{StaticResource MutedLabel}" />
+                    <Picker x:Name="ThemePicker"
+                            Title="Theme"
+                            SelectedIndexChanged="ThemeChanged" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Border Style="{StaticResource CardBorder}">
+                <VerticalStackLayout Spacing="10">
                     <Label Text="Connection" FontSize="20" FontAttributes="Bold" />
 
                     <Label Text="Local Emby URL" FontAttributes="Bold" />
