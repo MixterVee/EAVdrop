@@ -13,8 +13,8 @@
 
     <ApplicationTitle>EAVdrop</ApplicationTitle>
     <ApplicationId>com.eavdrop.viewer</ApplicationId>
-    <ApplicationDisplayVersion>0.4.30</ApplicationDisplayVersion>
-    <ApplicationVersion>56</ApplicationVersion>
+    <ApplicationDisplayVersion>0.4.31</ApplicationDisplayVersion>
+    <ApplicationVersion>57</ApplicationVersion>
 
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
