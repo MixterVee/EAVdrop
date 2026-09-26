@@ -15,7 +15,7 @@ public sealed class SessionInfoDto
     public bool SupportsRemoteControl { get; set; }
     public List<string> SupportedCommands { get; set; } = [];
 
-    // Filled by Sync'EM up after comparing the full session list with
+    // Filled by Sync'EM after comparing the full session list with
     // /Sessions?ControllableByUserId=...
     public bool IsControllableForSignedInUser { get; set; }
 
@@ -75,7 +75,7 @@ public sealed class SessionInfoDto
         ? "Remote control ready"
         : SupportsRemoteControl
             ? "Client reports remote-control support"
-            : "Remote control unverified — Sync'EM up will try";
+            : "Remote control unverified — Sync'EM will try";
     public string LastActivityDisplay => LastActivityDate.HasValue
         ? $"Last active {LastActivityDate.Value.LocalDateTime:g}"
         : "";
