@@ -15,6 +15,7 @@ public partial class DashboardPage : ContentPage
     private readonly EventMonitorService _eventMonitor;
 
     private bool _loading;
+    private bool _showAllEvents;
     private CancellationTokenSource? _refreshCts;
     private DateTimeOffset? _lastRecentActivityAt;
 
@@ -84,6 +85,12 @@ public partial class DashboardPage : ContentPage
     private async void OpenDevicesClicked(object sender, EventArgs e) =>
         await Shell.Current.GoToAsync("//devices");
 
+    private void ToggleEventsClicked(object sender, EventArgs e)
+    {
+        _showAllEvents = !_showAllEvents;
+        RefreshEvents();
+    }
+
     private async void ClearEventsClicked(object sender, EventArgs e)
     {
         if (_eventMonitor.GetEvents(1).Count == 0)
@@ -96,7 +103,10 @@ public partial class DashboardPage : ContentPage
             "Cancel");
 
         if (clear)
+        {
+            _showAllEvents = false;
             _eventMonitor.Clear();
+        }
     }
 
     private async Task AutoRefreshAsync(CancellationToken ct)
@@ -321,16 +331,22 @@ public partial class DashboardPage : ContentPage
     private void RefreshEvents()
     {
         var all = _eventMonitor.GetEvents();
-        var visible = all.Take(6).ToList();
+        var visible = _showAllEvents
+            ? all.ToList()
+            : all.Take(6).ToList();
 
         BindableLayout.SetItemsSource(EventsStack, visible);
         EventsEmptyLabel.IsVisible = visible.Count == 0;
+
+        ShowAllEventsButton.IsVisible = all.Count > 6;
+        ShowAllEventsButton.Text = _showAllEvents ? "Latest" : "All";
 
         EventsCaption.Text = all.Count switch
         {
             0 => "Watching playback, transcoding, users and Sync'EM",
             1 => "1 saved event • live monitoring",
             _ when all.Count <= 6 => $"{all.Count} saved events • live monitoring",
+            _ when _showAllEvents => $"{all.Count} saved events • live monitoring",
             _ => $"Latest 6 of {all.Count} saved events • live monitoring"
         };
     }
