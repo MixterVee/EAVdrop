@@ -127,7 +127,7 @@ public sealed class SyncCoordinatorService
     public async Task RealignNowAsync(CancellationToken ct = default)
     {
         if (!IsRunning)
-            throw new InvalidOperationException("Start Sync'EM up first.");
+            throw new InvalidOperationException("Start Sync'EM first.");
 
         if (!await _precisionGate.WaitAsync(0, ct))
         {
@@ -343,7 +343,7 @@ public sealed class SyncCoordinatorService
                 ResetSyncState();
 
             _syncCts = new CancellationTokenSource();
-            SetStatus($"Sync'EM up active • started from beginning • {_settings.SyncParticipantLeadMilliseconds} ms lead");
+            SetStatus($"Sync'EM active • started from beginning • {_settings.SyncParticipantLeadMilliseconds} ms lead");
             _ = RunLoopAsync(_syncCts.Token);
         }
         catch
@@ -470,7 +470,7 @@ public sealed class SyncCoordinatorService
                 RememberHostState(anchor.Host);
 
             _syncCts = new CancellationTokenSource();
-            SetStatus($"Sync'EM up active • stable-anchor start • {participants.Count} participant{(participants.Count == 1 ? "" : "s")}");
+            SetStatus($"Sync'EM active • stable-anchor start • {participants.Count} participant{(participants.Count == 1 ? "" : "s")}");
             _ = RunLoopAsync(_syncCts.Token);
         }
         catch
@@ -559,7 +559,7 @@ public sealed class SyncCoordinatorService
                 RememberHostState(host);
 
                 var stateText = hostPaused ? "paused" : "steady";
-                SetStatus($"Sync'EM up active • {host.MediaDisplay} • {stateText} • precision align on seek/pause");
+                SetStatus($"Sync'EM active • {host.MediaDisplay} • {stateText} • precision align on seek/pause");
             }
         }
         catch (OperationCanceledException)
