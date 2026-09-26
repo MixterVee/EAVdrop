@@ -8,4 +8,19 @@
     <Color x:Key="EavSurfaceLight">#F3F4F6</Color>
     <Color x:Key="EavMutedDark">#9CA3AF</Color>
     <Color x:Key="EavMutedLight">#4B5563</Color>
+
+    <!-- Semantic colors. These are replaced at runtime when the user changes
+         EAVdrop's Appearance setting, so DynamicResource consumers repaint
+         immediately even on Android TV. -->
+    <Color x:Key="EavPageBackground">#FFFFFF</Color>
+    <Color x:Key="EavText">#111827</Color>
+    <Color x:Key="EavMuted">#4B5563</Color>
+    <Color x:Key="EavCardBackground">#F3F4F6</Color>
+    <Color x:Key="EavMediaCardBackground">#F9FAFB</Color>
+    <Color x:Key="EavCardStroke">#E5E7EB</Color>
+    <Color x:Key="EavControlBackground">#FFFFFF</Color>
+    <Color x:Key="EavPlaceholder">#6B7280</Color>
+    <Color x:Key="EavShellBackground">#FFFFFF</Color>
+    <Color x:Key="EavTabBarBackground">#F3F4F6</Color>
+    <Color x:Key="EavTabUnselected">#64748B</Color>
 </ResourceDictionary>
