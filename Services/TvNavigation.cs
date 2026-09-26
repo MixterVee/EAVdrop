@@ -121,6 +121,13 @@ public static class TvNavigation
             {
                 button.TextColor = Colors.White;
             }
+            else if (isTv)
+            {
+                // Keep TV labels explicit. DynamicResource text colors can fail
+                // to resolve on MAUI's Android-TV Material buttons after focus
+                // changes, making every non-focused tab appear to disappear.
+                button.TextColor = Color.FromArgb("#CBD5E1");
+            }
             else
             {
                 button.SetDynamicResource(
@@ -148,11 +155,13 @@ public static class TvNavigation
                     button.BorderWidth = 0;
 
                     if (selected)
+                    {
                         button.TextColor = Colors.White;
+                    }
                     else
-                        button.SetDynamicResource(
-                            Button.TextColorProperty,
-                            "EavTabUnselected");
+                    {
+                        button.TextColor = Color.FromArgb("#CBD5E1");
+                    }
 
                     button.FontAttributes = selected
                         ? FontAttributes.Bold
