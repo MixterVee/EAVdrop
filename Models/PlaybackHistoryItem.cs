@@ -1,5 +1,37 @@
 namespace EAVdrop.Models;
 
+public static class PlaybackDurationFormatter
+{
+    public static string Format(int seconds)
+    {
+        if (seconds <= 0)
+            return "";
+
+        var span = TimeSpan.FromSeconds(seconds);
+
+        if (span.TotalHours >= 1)
+        {
+            var hours = (int)span.TotalHours;
+            return span.Minutes > 0
+                ? $"{hours}h {span.Minutes}m"
+                : $"{hours}h";
+        }
+
+        if (span.TotalMinutes >= 1)
+            return $"{Math.Max(1, (int)Math.Round(span.TotalMinutes))} min";
+
+        return "< 1 min";
+    }
+
+    public static string Played(int seconds)
+    {
+        var formatted = Format(seconds);
+        return string.IsNullOrWhiteSpace(formatted)
+            ? ""
+            : $"Played {formatted}";
+    }
+}
+
 public sealed class PlaybackHistoryItem
 {
     public string UserId { get; set; } = "";
@@ -7,9 +39,16 @@ public sealed class PlaybackHistoryItem
     public string Title { get; set; } = "";
     public string Type { get; set; } = "";
     public DateTimeOffset PlayedDate { get; set; }
+    public int DurationSeconds { get; set; }
 
     public string DateDisplay => PlayedDate.LocalDateTime.ToString("g");
     public string TypeDisplay => string.IsNullOrWhiteSpace(Type) ? "Media" : Type;
+    public string DurationDisplay => PlaybackDurationFormatter.Played(DurationSeconds);
+    public string HistoryDetail =>
+        string.Join(
+            " • ",
+            new[] { DurationDisplay, "Playback history" }
+                .Where(x => !string.IsNullOrWhiteSpace(x)));
 }
 
 public sealed class UserPlaybackSummary
@@ -52,18 +91,25 @@ public sealed class ActivityFeedItem
     public string QualityDisplay { get; set; } = "";
     public string ProgressText { get; set; } = "";
     public double Progress { get; set; }
+    public int DurationSeconds { get; set; }
 
     public string TypeDisplay => string.IsNullOrWhiteSpace(Type) ? "Media" : Type;
     public string Eyebrow => IsNowPlaying ? "NOW PLAYING" : TypeDisplay.ToUpperInvariant();
     public string DateDisplay => IsNowPlaying ? "Live" : SortDate.LocalDateTime.ToString("g");
     public bool ShowProgress => IsNowPlaying;
+    public string DurationDisplay => PlaybackDurationFormatter.Played(DurationSeconds);
 
     public string DetailLine
     {
         get
         {
             if (!IsNowPlaying)
-                return UserName;
+            {
+                return string.Join(
+                    " • ",
+                    new[] { UserName, DurationDisplay }
+                        .Where(x => !string.IsNullOrWhiteSpace(x)));
+            }
 
             return string.Join(
                 " • ",
@@ -89,5 +135,6 @@ public sealed class ActivityFeedItem
         DeviceDisplay.Contains(search, StringComparison.OrdinalIgnoreCase) ||
         PlaybackMethod.Contains(search, StringComparison.OrdinalIgnoreCase) ||
         StreamDetails.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-        QualityDisplay.Contains(search, StringComparison.OrdinalIgnoreCase);
+        QualityDisplay.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+        DurationDisplay.Contains(search, StringComparison.OrdinalIgnoreCase);
 }
