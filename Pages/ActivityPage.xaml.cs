@@ -107,6 +107,29 @@ public partial class ActivityPage : ContentPage
 
             var historyTasks = users.Select(async user =>
             {
+                var reporting =
+                    await _api.TryGetPlaybackReportingHistoryAsync(user.Id, cutoff);
+
+                if (reporting is not null)
+                {
+                    return reporting
+                        .Select(item => new ActivityFeedItem
+                        {
+                            UserId = user.Id,
+                            UserName = user.Name,
+                            Title = string.IsNullOrWhiteSpace(item.ItemName)
+                                ? "Unknown media"
+                                : item.ItemName,
+                            Type = string.IsNullOrWhiteSpace(item.ItemType)
+                                ? "Media"
+                                : item.ItemType,
+                            SortDate = item.PlayedDate,
+                            DurationSeconds = item.DurationSeconds,
+                            IsNowPlaying = false
+                        })
+                        .ToList();
+                }
+
                 var items =
                     await _api.GetPlaybackHistoryItemsAsync(user.Id, cutoff);
 
