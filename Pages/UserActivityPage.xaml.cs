@@ -54,23 +54,51 @@ public partial class UserActivityPage : ContentPage, IQueryAttributable
         {
             var cutoff = _settings.GetPlaybackHistoryCutoff();
             var sessionsTask = _api.GetSessionsAsync();
-            var playedItemsTask =
-                _api.GetPlaybackHistoryItemsAsync(_userId, cutoff);
+            var reportingTask =
+                _api.TryGetPlaybackReportingHistoryAsync(_userId, cutoff);
 
-            await Task.WhenAll(sessionsTask, playedItemsTask);
+            await Task.WhenAll(sessionsTask, reportingTask);
 
-            var playback = (await playedItemsTask)
-                .Where(item => item.UserData?.LastPlayedDate is not null)
-                .Select(item => new PlaybackHistoryItem
-                {
-                    UserId = _userId,
-                    UserName = _userName,
-                    Title = item.DisplayName,
-                    Type = item.Type ?? "Media",
-                    PlayedDate = item.UserData!.LastPlayedDate!.Value
-                })
-                .OrderByDescending(x => x.PlayedDate)
-                .ToList();
+            var reporting = await reportingTask;
+            List<PlaybackHistoryItem> playback;
+
+            if (reporting is not null)
+            {
+                playback = reporting
+                    .Select(item => new PlaybackHistoryItem
+                    {
+                        UserId = _userId,
+                        UserName = _userName,
+                        Title = string.IsNullOrWhiteSpace(item.ItemName)
+                            ? "Unknown media"
+                            : item.ItemName,
+                        Type = string.IsNullOrWhiteSpace(item.ItemType)
+                            ? "Media"
+                            : item.ItemType,
+                        PlayedDate = item.PlayedDate,
+                        DurationSeconds = item.DurationSeconds
+                    })
+                    .OrderByDescending(x => x.PlayedDate)
+                    .ToList();
+            }
+            else
+            {
+                var playedItems =
+                    await _api.GetPlaybackHistoryItemsAsync(_userId, cutoff);
+
+                playback = playedItems
+                    .Where(item => item.UserData?.LastPlayedDate is not null)
+                    .Select(item => new PlaybackHistoryItem
+                    {
+                        UserId = _userId,
+                        UserName = _userName,
+                        Title = item.DisplayName,
+                        Type = item.Type ?? "Media",
+                        PlayedDate = item.UserData!.LastPlayedDate!.Value
+                    })
+                    .OrderByDescending(x => x.PlayedDate)
+                    .ToList();
+            }
 
             var playing = (await sessionsTask)
                 .Where(s =>
@@ -97,8 +125,10 @@ public partial class UserActivityPage : ContentPage, IQueryAttributable
             {
                 SummaryTitleLabel.Text = "LAST PLAYED";
                 SummaryMainLabel.Text = lastPlayed.Title;
-                SummaryDetailLabel.Text =
-                    $"{lastPlayed.TypeDisplay} • {lastPlayed.DateDisplay}";
+                SummaryDetailLabel.Text = JoinParts(
+                    lastPlayed.TypeDisplay,
+                    lastPlayed.DurationDisplay,
+                    lastPlayed.DateDisplay);
                 NowPlayingProgressBar.IsVisible = false;
             }
             else
@@ -111,9 +141,15 @@ public partial class UserActivityPage : ContentPage, IQueryAttributable
 
             ActivityView.ItemsSource = playback;
 
+            var totalSeconds = playback.Sum(x => x.DurationSeconds);
+            var totalTime = PlaybackDurationFormatter.Format(totalSeconds);
+
             StatusLabel.Text = playback.Count == 1
-                ? $"1 item from {_settings.HistoryRangeCaption}"
-                : $"{playback.Count} items from {_settings.HistoryRangeCaption}";
+                ? $"1 play from {_settings.HistoryRangeCaption}"
+                : $"{playback.Count} plays from {_settings.HistoryRangeCaption}";
+
+            if (!string.IsNullOrWhiteSpace(totalTime))
+                StatusLabel.Text += $" • {totalTime} watched";
         }
         catch (Exception ex)
         {
