@@ -96,10 +96,62 @@ public partial class UsersPage : ContentPage
 
             var summaryTasks = users.Select(async user =>
             {
-                var history = (await _api.GetPlaybackHistoryItemsAsync(user.Id, cutoff))
-                    .Where(item => item.UserData?.LastPlayedDate is not null)
-                    .OrderByDescending(item => item.UserData!.LastPlayedDate)
-                    .ToList();
+                var reporting =
+                    await _api.TryGetPlaybackReportingHistoryAsync(user.Id, cutoff);
+
+                List<string> recentLines;
+                string countText;
+
+                if (reporting is not null)
+                {
+                    recentLines = reporting
+                        .Take(3)
+                        .Select(item =>
+                        {
+                            var duration =
+                                PlaybackDurationFormatter.Played(item.DurationSeconds);
+                            var when = item.PlayedDate.LocalDateTime;
+
+                            return JoinParts(
+                                string.IsNullOrWhiteSpace(item.ItemName)
+                                    ? "Unknown media"
+                                    : item.ItemName,
+                                duration,
+                                when.ToString("g"));
+                        })
+                        .ToList();
+
+                    var totalSeconds = reporting.Sum(x => x.DurationSeconds);
+                    var totalTime = PlaybackDurationFormatter.Format(totalSeconds);
+
+                    countText = reporting.Count == 1
+                        ? $"1 play in {_settings.HistoryRangeCaption}"
+                        : $"{reporting.Count} plays in {_settings.HistoryRangeCaption}";
+
+                    if (!string.IsNullOrWhiteSpace(totalTime))
+                        countText += $" • {totalTime} watched";
+                }
+                else
+                {
+                    var history =
+                        (await _api.GetPlaybackHistoryItemsAsync(user.Id, cutoff))
+                        .Where(item => item.UserData?.LastPlayedDate is not null)
+                        .OrderByDescending(item => item.UserData!.LastPlayedDate)
+                        .ToList();
+
+                    recentLines = history
+                        .Take(3)
+                        .Select(item =>
+                        {
+                            var when = item.UserData!.LastPlayedDate!.Value.LocalDateTime;
+                            return $"{item.DisplayName} • {when:g}";
+                        })
+                        .ToList();
+
+                    countText = history.Count == 1
+                        ? $"1 item in {_settings.HistoryRangeCaption}"
+                        : $"{history.Count} items in {_settings.HistoryRangeCaption}";
+                }
 
                 var playing = sessions
                     .Where(s =>
@@ -111,21 +163,8 @@ public partial class UsersPage : ContentPage
                     .OrderByDescending(s => s.LastActivityDate)
                     .FirstOrDefault();
 
-                var recentLines = history
-                    .Take(3)
-                    .Select(item =>
-                    {
-                        var when = item.UserData!.LastPlayedDate!.Value.LocalDateTime;
-                        return $"{item.DisplayName} • {when:g}";
-                    })
-                    .ToList();
-
                 if (recentLines.Count == 0)
                     recentLines.Add(_settings.NoPlaybackText);
-
-                var countText = history.Count == 1
-                    ? $"1 item in {_settings.HistoryRangeCaption}"
-                    : $"{history.Count} items in {_settings.HistoryRangeCaption}";
 
                 return new UserPlaybackSummary
                 {
