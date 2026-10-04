@@ -282,6 +282,46 @@ public sealed class EmbyApiClient
         }
     }
 
+    public async Task<List<PlaybackReportingItemDto>?> TryGetPlaybackReportingHistoryAsync(
+        string userId,
+        DateTimeOffset? cutoff,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return [];
+
+        var now = DateTimeOffset.Now;
+        var days = cutoff.HasValue
+            ? Math.Max(1, (now.Date - cutoff.Value.Date).Days + 1)
+            : 36500;
+
+        var endDate = Uri.EscapeDataString(now.ToString("yyyy-MM-dd"));
+        var escapedUserId = Uri.EscapeDataString(userId);
+
+        try
+        {
+            var items = await GetAsync<List<PlaybackReportingItemDto>>(
+                $"user_usage_stats/UserPlaylist?user_id={escapedUserId}&aggregate_data=false&days={days}&end_date={endDate}",
+                ct);
+
+            return items
+                .Where(x => x.PlayedDate != DateTimeOffset.MinValue)
+                .Where(x => !cutoff.HasValue || x.PlayedDate >= cutoff.Value)
+                .OrderByDescending(x => x.PlayedDate)
+                .ToList();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            throw;
+        }
+        catch
+        {
+            // Playback Reporting is optional. Callers fall back to Emby's core
+            // last-played history when the plugin or endpoint is unavailable.
+            return null;
+        }
+    }
+
     private async Task PostAsync(string relativePath, object? body, CancellationToken ct)
     {
         var token = await _settings.GetAccessTokenAsync();
